@@ -1,0 +1,4 @@
+port=6000
+n=15
+policy=FIFO
+scripts=none;
