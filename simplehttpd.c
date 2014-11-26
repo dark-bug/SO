@@ -22,6 +22,8 @@
  #include <assert.h>
  #include <sys/ipc.h>
  #include <sys/msg.h>
+ #include <fcntl.h>
+ #include <semaphore.h>
 
 // Produce debug information
 #define DEBUG	  	1	
@@ -30,7 +32,6 @@
 #define	SERVER_STRING 	"Server: simpleserver/0.1.0\r\n"
 #define HEADER_1	"HTTP/1.0 200 OK\r\n"
 #define HEADER_2	"Content-Type: text/html\r\n\r\n"
-
 #define GET_EXPR	"GET /"
 #define CGI_EXPR	"cgi-bin/"
 #define SIZE_BUF	1024
@@ -44,9 +45,12 @@
  char buf[SIZE_BUF];
  char req_buf[SIZE_BUF];
  char buf_tmp[SIZE_BUF];
- int socket_conn,new_conn, m_queue,shmid;
+ int socket_conn,new_conn, m_queue,shmid,policy;
  pid_t configuration;
  pid_t statistics;
+ time_t server_init_time;
+
+
 
  time_t timestamp(){
  	time_t ltime;
@@ -71,6 +75,18 @@
  	char reception_time[STRING],conclusion_time[STRING];
  }stats;
 
+ typedef struct request_list *Request;
+ typedef struct request_list{
+ 	int socket;
+ 	char ficheiro[STRING];
+ 	int request_type;
+ 	Request next;
+ }request;
+ Request req;
+
+ sem_t *full;
+ sem_t *empty;
+ sem_t *mutex;
 
  time_t timestamp();
  int  fireup(int port);
@@ -90,12 +106,21 @@
  void catch_hangup(int sig);
  void cleanup();
  void write_stats();
-
+ void display_stats();
+ void do_stats();
+ void *sched();
+ void *workers(void* id_thread);
+ void init();
+ Request init_request_list();
+ void search_request(Request req,int request_type,int pol,Request *ant,Request *actual);
+ void define_policy(char policy[STRING]);
 
 
  int main(int argc, char ** argv)
  {
- 	time_t server_init_time = timestamp();
+ 	init();
+ 	
+ 	server_init_time = timestamp();
  	printf("%s",asctime(localtime(&server_init_time)));
 
  	struct sockaddr_in client_name;
@@ -431,11 +456,10 @@
  void conf_manager(){
 
  	read_conf();
-
+ 	define_policy(conf->policy);
  	//add to sleep
  }
-
-
+ 
  void read_conf(){
  	FILE *f = fopen(CONF_FILE,"r");
 
@@ -450,7 +474,7 @@
  	if(f!=NULL){
  		int i=1;
  		char line[SIZE_BUF];
- 		printf("Reading configurations.txt file.\n\n");
+
 
  		while(fgets(line,sizeof(line),f)!=NULL){
  			char *temp;
@@ -473,6 +497,7 @@
  			}
  			i++;
  		}
+ 		printf("Read configurations.txt file.\n\n");
  	}
  	else{
  		printf("No configurations file found\n");
@@ -484,10 +509,7 @@
 
  void stats_manager(){
 
- 	//do wait for request_to_queue(aux);
- 
- 	write_stats();
-
+ 	signal(SIGHUP,display_stats);
 
  }
 
@@ -503,15 +525,14 @@
  		printf("Something went wrong, can't write the stats file!\n");
  		exit(1);
  	}
- 
- 		if(msgrcv(m_queue,&aux,sizeof(aux),1,0)){
- 			printf("Received message.\nWriting to file.\n");
- 			printf("%s,%s,%s,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
- 				fprintf(f,"%s,%s,%s,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
- 		}
- 	
- 	fclose(f);
 
+ 	if(msgrcv(m_queue,&aux,sizeof(aux),1,0)){
+ 		printf("Received message.\nWriting to file.\n");
+ 		printf("%s,%s,%s,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 		fprintf(f,"%s,%s,%s,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 	}
+
+ 	fclose(f);
  }
 
  void request_to_queue(stats aux){
@@ -523,8 +544,24 @@
  		system("pause");
  		exit(0);
  	}
+ }
 
 
+ void display_stats(){
+ 	time_t current_time = timestamp();
+ 	int n_static=14,n_dynamic=13,n_refused=2;
+
+ 	printf("Server initiated: %s | Current time: %s",asctime(localtime(&server_init_time)),asctime(localtime(&current_time)));
+ //esta a devolver a data mal, ver para nao ter este bug
+ 	printf("Number of successful requests to static content: %d", n_static);
+ 	printf("Number of successful requests to dynamic content: %d", n_dynamic);
+ 	printf("Number of refused requests: %d", n_refused);
+
+ }
+
+ void do_stats(int n){
+ 	//int output;
+	//do a switch that receives 1-static 2-dynamic 3-refused and runs the message queue checking and incrementing if matches
  }
 
  void cleanup(){
@@ -533,6 +570,129 @@
  	shmctl(shmid,IPC_RMID,NULL);
  	//removing the queue
  	msgctl(m_queue,IPC_RMID,0);
+ 	sem_close(empty);
+ 	sem_close(full);
+ 	sem_close(mutex);
+ }
+
+ void init(){
+
+ 	req = init_request_list();
+
+ 	sem_unlink("EMPTY");
+ 	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,STRING);
+ 	sem_unlink("FULL");
+ 	full = sem_open("FULL",O_CREAT|O_EXCL,0700,0);
+ 	sem_unlink("MUTEX");
+ 	mutex = sem_open("MUTEX",O_CREAT|O_EXCL,0700,1);
+
+
+ 	shmid = shmget(IPC_PRIVATE, sizeof(config),IPC_CREAT|0700);
+ 	conf = (config*)shmat(shmid,NULL,0);
+
+ 	if((m_queue = msgget(IPC_PRIVATE,IPC_CREAT|0700)) < 0){
+ 		printf("Error initializing message queue.\n");
+ 	}
+ 	else{
+ 		printf("Created message queue.\n");
+ 	}
+
+//create configuration process
+ 	if((configuration=fork())==0){
+ 		conf_manager();
+ 	}
+ 	else if(configuration<0){
+ 		printf("Error creating configuration process.\n");
+ 		exit(-1);
+ 	}
+ 	else{
+ 		wait(NULL);
+ 	}
+
+ 	//create statistics process
+ 	if((statistics=fork())==0){
+ 		stats_manager();
+ 	}
+ 	else if(statistics<0){
+ 		printf("Error creating statitstics process.\n");
+ 		exit(-1);
+ 	}
+ 	else{
+ 		wait(NULL);
+ 	}
+
+ 	/*pthread_t SCHEDULER;
+ 	pthread_t POOL[atoi(conf->n)];
+*/
+ }
+
+ Request init_request_list(void){
+ 	Request aux;
+ 	aux = (Request) malloc (sizeof(request));
+ 	if(aux!=NULL){
+ 		aux->request_type =0;
+ 		aux->socket = 0;
+ 		strcpy(aux->ficheiro,"");
+ 		aux->next=NULL;
+ 	}
+ 	return aux;
+ }
+
+ void insert_request(Request req,int socket, int request_type,int pol, char ficheiro[STRING]){
+ 	Request no;
+ 	Request ant;
+ 	Request inutil;
+
+ 	no = (Request) malloc(sizeof(request));
+ 	if(no!=NULL){
+ 		no->request_type = request_type;
+ 		strcpy((no->ficheiro), ficheiro);
+ 		no->socket = socket;
+ 		search_request(req,request_type,pol, &ant, &inutil);
+ 		no->next = ant->next;
+ 		ant->next = no;
+ 	}
  }
 
 
+
+ void search_request(Request req,int request_type,int pol,Request *ant,Request *actual){
+ 	*ant = req;
+ 	*actual = req->next;
+
+ 	switch(pol){
+ 		case 0:
+ 		//procurar ate ser NULL;
+ 		break;
+ 		case 1:
+ 		while ((*actual) != NULL && (*actual)->request_type < request_type)
+ 		{
+ 			*ant = *actual;
+ 			*actual = (*actual)->next;
+ 		}
+ 		if ((*actual) != NULL && (*actual)->request_type != request_type)
+ 		{
+ 			*actual = NULL;
+ 		}
+ 		break;
+ 		case 2:
+ 		//fazer ao contrario da de cima;
+ 		break;
+ 	}
+ }
+
+void elimina_ultimo(Request req)
+{
+ 	Request ant;
+ 	Request actual;
+ 	
+}
+
+ void define_policy(char input[STRING]){
+ 	if(strcmp(input,"FIFO")==0)
+ 		policy = 0;
+ 	if(strcmp(input,"STATIC")==0)
+ 		policy = 1;
+ 	if(strcmp(input,"DYNAMIC")==0)
+ 		policy = 2;
+ }
