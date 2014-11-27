@@ -24,6 +24,7 @@
  #include <sys/msg.h>
  #include <fcntl.h>
  #include <semaphore.h>
+ #include <pthread.h>
 
 // Produce debug information
 #define DEBUG	  	1	
@@ -42,6 +43,7 @@
 #define DELIMITATOR "="
 #define COMMA ","
 
+
  char buf[SIZE_BUF];
  char req_buf[SIZE_BUF];
  char buf_tmp[SIZE_BUF];
@@ -50,7 +52,7 @@
  pid_t statistics;
  time_t server_init_time;
 
-
+ int chegadas;
 
  time_t timestamp(){
  	time_t ltime;
@@ -75,14 +77,23 @@
  	char reception_time[STRING],conclusion_time[STRING];
  }stats;
 
- typedef struct request_list *Request;
- typedef struct request_list{
+ typedef struct req{
+ 	int tipo_pedido;
+ 	char ficheiro[SIZE_BUF];
  	int socket;
- 	char ficheiro[STRING];
- 	int request_type;
- 	Request next;
+ 	int n_chegada;
+ 	int atendido;
  }request;
- Request req;
+
+ typedef struct lista_pedidos	
+ {
+ 	request buffer[N_PEDIDOS];
+ 	int pos_escrita;
+ 	int pos_leitura;
+
+ }lista_p;
+
+ lista_p *lista_pedidos;
 
  sem_t *full;
  sem_t *empty;
@@ -94,7 +105,6 @@
  void get_request(int socket);
  int  read_line(int socket, int n);
  void send_header(int socket);
- void send_page(int socket);
  void execute_script(int socket);
  void not_found(int socket);
  void catch_ctrlc(int);
@@ -111,58 +121,26 @@
  void *sched();
  void *workers(void* id_thread);
  void init();
- Request init_request_list();
- void search_request(Request req,int request_type,int pol,Request *ant,Request *actual);
  void define_policy(char policy[STRING]);
+ void send_page(int socket, char ficheiro[SIZE_BUF]);
 
 
  int main(int argc, char ** argv)
  {
+ 	int i;
+
  	init();
  	
+ 	pthread_t SCHEDULER;
+ 	pthread_t POOL[atoi(conf->n)];
+
  	server_init_time = timestamp();
  	printf("%s",asctime(localtime(&server_init_time)));
 
+ 	signal(SIGINT,catch_ctrlc);
  	struct sockaddr_in client_name;
  	socklen_t client_name_len = sizeof(client_name);
  	int port,n;
-
- 	shmid = shmget(IPC_PRIVATE, sizeof(config),IPC_CREAT|0700);
- 	conf = (config*)shmat(shmid,NULL,0);
-
- 	if((m_queue = msgget(IPC_PRIVATE,IPC_CREAT|0700)) < 0){
- 		printf("Error initializing message queue.\n");
- 	}
- 	else{
- 		printf("Created message queue.\n");
- 	}
-
- 	signal(SIGINT,catch_ctrlc);
- 	signal(SIGHUP,catch_hangup);
-
- 	//create configuration process
- 	if((configuration=fork())==0){
- 		conf_manager();
- 	}
- 	else if(configuration<0){
- 		printf("Error creating configuration process.\n");
- 		exit(-1);
- 	}
- 	else{
- 		wait(NULL);
- 	}
-
- 	//create statistics process
- 	if((statistics=fork())==0){
- 		stats_manager();
- 	}
- 	else if(statistics<0){
- 		printf("Error creating statitstics process.\n");
- 		exit(-1);
- 	}
- 	else{
- 		wait(NULL);
- 	}
 
  	port = atoi(conf->port);
  	n = atoi(conf->n);
@@ -170,7 +148,6 @@
  	printf("Listening for HTTP requests on port %d\n",port);
  	printf("We'll be having %d threads in pool\n",n);
  	printf("Scheduler follows %s",conf->policy);
-
 
 
 	// Configure listening port
@@ -193,16 +170,72 @@
  		get_request(new_conn);
 
 		// Verify if request is for a page or script
- 		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR)))
- 			execute_script(new_conn);	
+ 		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
+ 			//execute_script(new_conn);
+ 			printf("\nPedido para script...");
+ 			sem_wait(empty);
+ 			sem_wait(mutex);
+			//pedido temporario
+
+ 			request pedido_temp;
+ 			pedido_temp.tipo_pedido = 0;
+ 			strcpy(pedido_temp.ficheiro,req_buf);
+ 			pedido_temp.socket = new_conn;
+ 			pedido_temp.n_chegada = chegadas;
+ 			chegadas++;
+ 			pedido_temp.atendido = N_ATENDIDO;
+
+			//insere pedido no buffer de pedidos
+ 			lista_pedidos->buffer[lista_pedidos->pos_escrita] = pedido_temp;
+			//apenas para verificar
+ 			pedido_temp = lista_pedidos->buffer[lista_pedidos->pos_escrita];
+ 			printf("\n\n----- Pedido: Tipo: %d - Doc: %s - Socket: %d ----- \n",pedido_temp.tipo_pedido,pedido_temp.ficheiro,pedido_temp.socket);
+ 			lista_pedidos->pos_escrita = (lista_pedidos->pos_escrita +1) % N_PEDIDOS;
+ 			printf("pedido para conteudo dinamico colocado na lista de pedidos!\n");
+
+ 			sem_post(mutex);
+ 			sem_post(full);	
+ 			//execute_script(new_conn);	
+ 		}
  		else
 			// Search file with html page and send to client
- 			send_page(new_conn);
+ 			//send_page(new_conn);
+ 			printf("\n-->Pedido para página...<--");
+ 		sem_wait(empty);
+ 		sem_wait(mutex);
+			//pedido temporario
+
+ 		request pedido_temp;
+ 		pedido_temp.tipo_pedido = 1;
+ 		strcpy(pedido_temp.ficheiro,req_buf);
+ 		pedido_temp.socket = new_conn;
+ 		pedido_temp.n_chegada = chegadas;
+ 		chegadas++;
+ 		pedido_temp.atendido = N_ATENDIDO;
+
+			//insere pedido no buffer de pedidos
+ 		lista_pedidos->buffer[lista_pedidos->pos_escrita] = pedido_temp;
+ 		pedido_temp = lista_pedidos->buffer[lista_pedidos->pos_escrita];
+ 		printf("\n\n-----> Pedido: Tipo: %d - Doc: %s - Socket: %d <----- \n",pedido_temp.tipo_pedido,pedido_temp.ficheiro,pedido_temp.socket);
+ 		lista_pedidos->pos_escrita = (lista_pedidos->pos_escrita +1) % N_PEDIDOS;
+ 		printf("pedido para conteudo estático colocado na lista de pedidos!\n");
+
+ 		sem_post(mutex);
+ 		sem_post(full);
 
 		// Terminate connection with client 
  		close(new_conn);
 
  	}
+
+ 	//Joining the threads
+ 	for(i=0;i<N_THREADS;i++)
+ 	{
+ 		pthread_join(POOL[i],NULL);
+ 	}
+ 	pthread_join(SCHEDULER,NULL);
+ 	cleanup();
+
 
  }
 
@@ -270,40 +303,40 @@
 
 
 // Send html page to client
- void send_page(int socket)
- {
- 	FILE * fp;
+void send_page(int socket, char ficheiro[SIZE_BUF])
+	{
+		FILE * fp;
 
 	// Searchs for page in directory htdocs
- 	sprintf(buf_tmp,"htdocs/%s",req_buf);
+		sprintf(buf_tmp,"htdocs/%s",ficheiro);
 
 	#if DEBUG
- 	printf("send_page: searching for %s\n",buf_tmp);
+		printf("send_page: searching for %s\n",buf_tmp);
 	#endif
 
 	// Verifies if file exists
- 	if((fp=fopen(buf_tmp,"rt"))==NULL) {
+		if((fp=fopen(buf_tmp,"rt"))==NULL) {
 		// Page not found, send error to client
- 		printf("send_page: page %s not found, alerting client\n",buf_tmp);
- 		not_found(socket);
- 	}
- 	else {
+			printf("send_page: page %s not found, alerting client\n",buf_tmp);
+			not_found(socket);
+		}
+		else {
 		// Page found, send to client 
-
+			
 		// First send HTTP header back to client
- 		send_header(socket);
+			send_header(socket);
 
- 		printf("send_page: sending page %s to client\n",buf_tmp);
- 		while(fgets(buf_tmp,SIZE_BUF,fp))
- 			send(socket,buf_tmp,strlen(buf_tmp),0);
-
+			printf("send_page: sending page %s to client\n",buf_tmp);
+			while(fgets(buf_tmp,SIZE_BUF,fp))
+				send(socket,buf_tmp,strlen(buf_tmp),0);
+			
 		// Close file
- 		fclose(fp);
- 	}
+			fclose(fp);
+		}
 
- 	return; 
+		return; 
 
- }
+	}
 
 
 // Identifies client (address and port) from socket
@@ -504,6 +537,7 @@
  		f=fopen(CONF_FILE,"w");
  	}
  	fclose(f);
+ 	define_policy(conf->policy);
 
  }
 
@@ -573,11 +607,15 @@
  	sem_close(empty);
  	sem_close(full);
  	sem_close(mutex);
+ 	free(lista_pedidos);
  }
 
  void init(){
 
- 	req = init_request_list();
+
+ 	lista_pedidos = (lista_p*)malloc(sizeof(lista_p));
+ 	lista_pedidos->pos_leitura = 0;
+ 	lista_pedidos->pos_escrita = 0;
 
  	sem_unlink("EMPTY");
  	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,STRING);
@@ -586,6 +624,7 @@
  	sem_unlink("MUTEX");
  	mutex = sem_open("MUTEX",O_CREAT|O_EXCL,0700,1);
 
+ 	chegadas = 0;
 
  	shmid = shmget(IPC_PRIVATE, sizeof(config),IPC_CREAT|0700);
  	conf = (config*)shmat(shmid,NULL,0);
@@ -621,72 +660,8 @@
  		wait(NULL);
  	}
 
- 	/*pthread_t SCHEDULER;
- 	pthread_t POOL[atoi(conf->n)];
-*/
+
  }
-
- Request init_request_list(void){
- 	Request aux;
- 	aux = (Request) malloc (sizeof(request));
- 	if(aux!=NULL){
- 		aux->request_type =0;
- 		aux->socket = 0;
- 		strcpy(aux->ficheiro,"");
- 		aux->next=NULL;
- 	}
- 	return aux;
- }
-
- void insert_request(Request req,int socket, int request_type,int pol, char ficheiro[STRING]){
- 	Request no;
- 	Request ant;
- 	Request inutil;
-
- 	no = (Request) malloc(sizeof(request));
- 	if(no!=NULL){
- 		no->request_type = request_type;
- 		strcpy((no->ficheiro), ficheiro);
- 		no->socket = socket;
- 		search_request(req,request_type,pol, &ant, &inutil);
- 		no->next = ant->next;
- 		ant->next = no;
- 	}
- }
-
-
-
- void search_request(Request req,int request_type,int pol,Request *ant,Request *actual){
- 	*ant = req;
- 	*actual = req->next;
-
- 	switch(pol){
- 		case 0:
- 		//procurar ate ser NULL;
- 		break;
- 		case 1:
- 		while ((*actual) != NULL && (*actual)->request_type < request_type)
- 		{
- 			*ant = *actual;
- 			*actual = (*actual)->next;
- 		}
- 		if ((*actual) != NULL && (*actual)->request_type != request_type)
- 		{
- 			*actual = NULL;
- 		}
- 		break;
- 		case 2:
- 		//fazer ao contrario da de cima;
- 		break;
- 	}
- }
-
-void elimina_ultimo(Request req)
-{
- 	Request ant;
- 	Request actual;
- 	
-}
 
  void define_policy(char input[STRING]){
  	if(strcmp(input,"FIFO")==0)
@@ -696,3 +671,36 @@ void elimina_ultimo(Request req)
  	if(strcmp(input,"DYNAMIC")==0)
  		policy = 2;
  }
+
+ void *workers(void* id_thread)
+ {
+ 	while(1)	
+ 	{
+ 		sem_wait(full);
+ 		sem_wait(mutex);
+ 		printf("\nThread nº: %d da pool a atender o pedido!\n",*((int*)id_thread));
+
+ 		request pedido_temp;
+ 		pedido_temp = lista_pedidos->buffer[lista_pedidos->pos_leitura];
+
+ 		if(pedido_temp.tipo_pedido == 0)
+ 		{
+ 			execute_script(pedido_temp.socket);
+ 		}
+ 		else if(pedido_temp.tipo_pedido == 1)
+ 		{
+ 			printf("\n\n Ficheiro Pretendido: %s\n",pedido_temp.ficheiro);
+ 			send_page(pedido_temp.socket,pedido_temp.ficheiro);
+ 		}
+ 		else
+ 		{
+ 			printf("\nERRO! Pedido não identificado!\n");
+ 		}
+ 		
+ 		lista_pedidos->pos_leitura = (lista_pedidos->pos_leitura +1) % N_PEDIDOS;
+ 		close(pedido_temp.socket);
+ 		sem_post(mutex);
+ 		sem_post(empty);
+ 	}
+ }
+
