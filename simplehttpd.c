@@ -19,12 +19,11 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/shm.h>
- #include <assert.h>
- #include <sys/ipc.h>
- #include <sys/msg.h>
- #include <fcntl.h>
- #include <semaphore.h>
- #include <pthread.h>
+#include <assert.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <fcntl.h>
+#include <semaphore.h>
 
 // Produce debug information
 #define DEBUG	  	1	
@@ -43,7 +42,6 @@
 #define DELIMITATOR "="
 #define COMMA ","
 
-
  char buf[SIZE_BUF];
  char req_buf[SIZE_BUF];
  char buf_tmp[SIZE_BUF];
@@ -52,7 +50,7 @@
  pid_t statistics;
  time_t server_init_time;
 
- int chegadas;
+
 
  time_t timestamp(){
  	time_t ltime;
@@ -77,23 +75,28 @@
  	char reception_time[STRING],conclusion_time[STRING];
  }stats;
 
- typedef struct req{
- 	int tipo_pedido;
- 	char ficheiro[SIZE_BUF];
- 	int socket;
- 	int n_chegada;
- 	int atendido;
- }request;
-
- typedef struct lista_pedidos	
+ typedef struct pedido
  {
- 	request buffer[N_PEDIDOS];
- 	int pos_escrita;
- 	int pos_leitura;
+ 	int socket;
+ 	char ficheiro[SIZE_BUF];
+ 	int tipo_pedido;
+ } PEDIDO;
+ 
+ typedef struct node_type
+ {
+ 	PEDIDO pedido;
+ 	struct node_type *next;
+ }NODE_TYPE;
 
- }lista_p;
+typedef NODE_TYPE *NODE_PTR;
 
- lista_p *lista_pedidos;
+typedef struct
+{
+	NODE_TYPE *rear;
+	NODE_TYPE *front;
+}Q_TYPE;
+
+Q_TYPE queue;
 
  sem_t *full;
  sem_t *empty;
@@ -105,6 +108,7 @@
  void get_request(int socket);
  int  read_line(int socket, int n);
  void send_header(int socket);
+ void send_page(int socket);
  void execute_script(int socket);
  void not_found(int socket);
  void catch_ctrlc(int);
@@ -122,25 +126,59 @@
  void *workers(void* id_thread);
  void init();
  void define_policy(char policy[STRING]);
- void send_page(int socket, char ficheiro[SIZE_BUF]);
-
+ void create_queue(Q_TYPE *queue);
+ int empty_queue(Q_TYPE *queue);
+ void destroy_queue(Q_TYPE *queue);
+ void enqueue(Q_TYPE *queue,int sckt,char fchr[SIZE_BUF], int tp );
+ PEDIDO dequeue(Q_TYPE *queue);
 
  int main(int argc, char ** argv)
  {
- 	int i;
-
  	init();
  	
- 	pthread_t SCHEDULER;
- 	pthread_t POOL[atoi(conf->n)];
-
  	server_init_time = timestamp();
  	printf("%s",asctime(localtime(&server_init_time)));
 
- 	signal(SIGINT,catch_ctrlc);
  	struct sockaddr_in client_name;
  	socklen_t client_name_len = sizeof(client_name);
  	int port,n;
+
+ 	shmid = shmget(IPC_PRIVATE, sizeof(config),IPC_CREAT|0700);
+ 	conf = (config*)shmat(shmid,NULL,0);
+
+ 	if((m_queue = msgget(IPC_PRIVATE,IPC_CREAT|0700)) < 0){
+ 		printf("Error initializing message queue.\n");
+ 	}
+ 	else{
+ 		printf("Created message queue.\n");
+ 	}
+
+ 	signal(SIGINT,catch_ctrlc);
+ 	signal(SIGHUP,catch_hangup);
+
+ 	//create configuration process
+ 	if((configuration=fork())==0){
+ 		conf_manager();
+ 	}
+ 	else if(configuration<0){
+ 		printf("Error creating configuration process.\n");
+ 		exit(-1);
+ 	}
+ 	else{
+ 		wait(NULL);
+ 	}
+
+ 	//create statistics process
+ 	if((statistics=fork())==0){
+ 		stats_manager();
+ 	}
+ 	else if(statistics<0){
+ 		printf("Error creating statitstics process.\n");
+ 		exit(-1);
+ 	}
+ 	else{
+ 		wait(NULL);
+ 	}
 
  	port = atoi(conf->port);
  	n = atoi(conf->n);
@@ -148,6 +186,7 @@
  	printf("Listening for HTTP requests on port %d\n",port);
  	printf("We'll be having %d threads in pool\n",n);
  	printf("Scheduler follows %s",conf->policy);
+
 
 
 	// Configure listening port
@@ -170,72 +209,30 @@
  		get_request(new_conn);
 
 		// Verify if request is for a page or script
- 		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
+ 		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR)))
  			//execute_script(new_conn);
- 			printf("\nPedido para script...");
- 			sem_wait(empty);
- 			sem_wait(mutex);
-			//pedido temporario
-
- 			request pedido_temp;
- 			pedido_temp.tipo_pedido = 0;
- 			strcpy(pedido_temp.ficheiro,req_buf);
- 			pedido_temp.socket = new_conn;
- 			pedido_temp.n_chegada = chegadas;
- 			chegadas++;
- 			pedido_temp.atendido = N_ATENDIDO;
-
-			//insere pedido no buffer de pedidos
- 			lista_pedidos->buffer[lista_pedidos->pos_escrita] = pedido_temp;
-			//apenas para verificar
- 			pedido_temp = lista_pedidos->buffer[lista_pedidos->pos_escrita];
- 			printf("\n\n----- Pedido: Tipo: %d - Doc: %s - Socket: %d ----- \n",pedido_temp.tipo_pedido,pedido_temp.ficheiro,pedido_temp.socket);
- 			lista_pedidos->pos_escrita = (lista_pedidos->pos_escrita +1) % N_PEDIDOS;
- 			printf("pedido para conteudo dinamico colocado na lista de pedidos!\n");
-
- 			sem_post(mutex);
- 			sem_post(full);	
- 			//execute_script(new_conn);	
+ 		{
+ 		sem_wait(empty);
+ 		sem_wait(mutex);
+ 		enqueue(&queue,new_conn,req_buf,0);
+ 		sem_post(mutex);
+ 		sem_post(full);
  		}
  		else
 			// Search file with html page and send to client
  			//send_page(new_conn);
- 			printf("\n-->Pedido para página...<--");
- 		sem_wait(empty);
- 		sem_wait(mutex);
-			//pedido temporario
-
- 		request pedido_temp;
- 		pedido_temp.tipo_pedido = 1;
- 		strcpy(pedido_temp.ficheiro,req_buf);
- 		pedido_temp.socket = new_conn;
- 		pedido_temp.n_chegada = chegadas;
- 		chegadas++;
- 		pedido_temp.atendido = N_ATENDIDO;
-
-			//insere pedido no buffer de pedidos
- 		lista_pedidos->buffer[lista_pedidos->pos_escrita] = pedido_temp;
- 		pedido_temp = lista_pedidos->buffer[lista_pedidos->pos_escrita];
- 		printf("\n\n-----> Pedido: Tipo: %d - Doc: %s - Socket: %d <----- \n",pedido_temp.tipo_pedido,pedido_temp.ficheiro,pedido_temp.socket);
- 		lista_pedidos->pos_escrita = (lista_pedidos->pos_escrita +1) % N_PEDIDOS;
- 		printf("pedido para conteudo estático colocado na lista de pedidos!\n");
-
- 		sem_post(mutex);
- 		sem_post(full);
+ 		{
+ 			sem_wait(empty);
+ 			sem_wait(mutex);
+ 			enqueue(&queue,new_conn,req_buf,1);
+ 			sem_post(mutex);
+ 			sem_post(full);
+ 		}
 
 		// Terminate connection with client 
  		close(new_conn);
 
  	}
-
- 	//Joining the threads
- 	for(i=0;i<N_THREADS;i++)
- 	{
- 		pthread_join(POOL[i],NULL);
- 	}
- 	pthread_join(SCHEDULER,NULL);
- 	cleanup();
-
 
  }
 
@@ -303,40 +300,40 @@
 
 
 // Send html page to client
-void send_page(int socket, char ficheiro[SIZE_BUF])
-	{
-		FILE * fp;
+ void send_page(int socket)
+ {
+ 	FILE * fp;
 
 	// Searchs for page in directory htdocs
-		sprintf(buf_tmp,"htdocs/%s",ficheiro);
+ 	sprintf(buf_tmp,"htdocs/%s",req_buf);
 
 	#if DEBUG
-		printf("send_page: searching for %s\n",buf_tmp);
+ 	printf("send_page: searching for %s\n",buf_tmp);
 	#endif
 
 	// Verifies if file exists
-		if((fp=fopen(buf_tmp,"rt"))==NULL) {
+ 	if((fp=fopen(buf_tmp,"rt"))==NULL) {
 		// Page not found, send error to client
-			printf("send_page: page %s not found, alerting client\n",buf_tmp);
-			not_found(socket);
-		}
-		else {
+ 		printf("send_page: page %s not found, alerting client\n",buf_tmp);
+ 		not_found(socket);
+ 	}
+ 	else {
 		// Page found, send to client 
-			
+
 		// First send HTTP header back to client
-			send_header(socket);
+ 		send_header(socket);
 
-			printf("send_page: sending page %s to client\n",buf_tmp);
-			while(fgets(buf_tmp,SIZE_BUF,fp))
-				send(socket,buf_tmp,strlen(buf_tmp),0);
-			
+ 		printf("send_page: sending page %s to client\n",buf_tmp);
+ 		while(fgets(buf_tmp,SIZE_BUF,fp))
+ 			send(socket,buf_tmp,strlen(buf_tmp),0);
+
 		// Close file
-			fclose(fp);
-		}
+ 		fclose(fp);
+ 	}
 
-		return; 
+ 	return; 
 
-	}
+ }
 
 
 // Identifies client (address and port) from socket
@@ -537,7 +534,6 @@ void send_page(int socket, char ficheiro[SIZE_BUF])
  		f=fopen(CONF_FILE,"w");
  	}
  	fclose(f);
- 	define_policy(conf->policy);
 
  }
 
@@ -607,15 +603,11 @@ void send_page(int socket, char ficheiro[SIZE_BUF])
  	sem_close(empty);
  	sem_close(full);
  	sem_close(mutex);
- 	free(lista_pedidos);
+ 	destroy_queue(&queue);
  }
 
  void init(){
 
-
- 	lista_pedidos = (lista_p*)malloc(sizeof(lista_p));
- 	lista_pedidos->pos_leitura = 0;
- 	lista_pedidos->pos_escrita = 0;
 
  	sem_unlink("EMPTY");
  	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,STRING);
@@ -624,7 +616,7 @@ void send_page(int socket, char ficheiro[SIZE_BUF])
  	sem_unlink("MUTEX");
  	mutex = sem_open("MUTEX",O_CREAT|O_EXCL,0700,1);
 
- 	chegadas = 0;
+ 	create_queue(&queue);
 
  	shmid = shmget(IPC_PRIVATE, sizeof(config),IPC_CREAT|0700);
  	conf = (config*)shmat(shmid,NULL,0);
@@ -660,9 +652,17 @@ void send_page(int socket, char ficheiro[SIZE_BUF])
  		wait(NULL);
  	}
 
-
+ 	/*pthread_t SCHEDULER;
+ 	pthread_t POOL[atoi(conf->n)];
+*/
  }
 
+
+ 
+
+
+
+ 
  void define_policy(char input[STRING]){
  	if(strcmp(input,"FIFO")==0)
  		policy = 0;
@@ -672,35 +672,62 @@ void send_page(int socket, char ficheiro[SIZE_BUF])
  		policy = 2;
  }
 
- void *workers(void* id_thread)
- {
- 	while(1)	
- 	{
- 		sem_wait(full);
- 		sem_wait(mutex);
- 		printf("\nThread nº: %d da pool a atender o pedido!\n",*((int*)id_thread));
+void create_queue(Q_TYPE *queue)
+{
+	queue->front = NULL;
+	queue->rear = NULL;
+}
 
- 		request pedido_temp;
- 		pedido_temp = lista_pedidos->buffer[lista_pedidos->pos_leitura];
+int empty_queue(Q_TYPE *queue)
+{
+	return(queue->front == NULL ? 1 : 0);
+}
 
- 		if(pedido_temp.tipo_pedido == 0)
- 		{
- 			execute_script(pedido_temp.socket);
- 		}
- 		else if(pedido_temp.tipo_pedido == 1)
- 		{
- 			printf("\n\n Ficheiro Pretendido: %s\n",pedido_temp.ficheiro);
- 			send_page(pedido_temp.socket,pedido_temp.ficheiro);
- 		}
- 		else
- 		{
- 			printf("\nERRO! Pedido não identificado!\n");
- 		}
- 		
- 		lista_pedidos->pos_leitura = (lista_pedidos->pos_leitura +1) % N_PEDIDOS;
- 		close(pedido_temp.socket);
- 		sem_post(mutex);
- 		sem_post(empty);
- 	}
- }
+void destroy_queue(Q_TYPE *queue)
+{
+	NODE_PTR temp_ptr;
+	while(empty_queue(queue)==0)
+	{
+		temp_ptr = queue->front;
+		queue->front = queue->front->next;
+		free(temp_ptr);
+	}
+	queue->rear = NULL;
+}
 
+void enqueue(Q_TYPE *queue,int sckt,char fchr[SIZE_BUF], int tp )
+{
+	NODE_PTR temp_ptr;
+	PEDIDO pedido_temp;
+	temp_ptr = (NODE_PTR) malloc (sizeof(NODE_TYPE));
+	pedido_temp.tipo_pedido  = tp;
+	pedido_temp.socket = sckt;
+	strcpy(pedido_temp.ficheiro,fchr);
+	if(temp_ptr != NULL)
+	{
+		temp_ptr->pedido = pedido_temp;
+		temp_ptr->next = NULL;
+		if(empty_queue(queue)==1)
+		{
+			queue->front = temp_ptr;
+		}
+		else queue->rear->next = temp_ptr;
+		queue->rear = temp_ptr;
+	}
+}
+
+PEDIDO dequeue(Q_TYPE *queue)
+{
+	NODE_PTR temp_ptr;
+	PEDIDO pd;
+	if(empty_queue(queue) == 0)
+	{
+		temp_ptr = queue->front;
+		pd = temp_ptr->pedido;
+		queue->front = queue->front->next;
+		if(empty_queue(queue) == 1)
+			queue->rear = NULL;
+		free(temp_ptr);
+		return(pd);
+	}
+} 
