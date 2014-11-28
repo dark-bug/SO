@@ -88,15 +88,15 @@
  	struct node_type *next;
  }NODE_TYPE;
 
-typedef NODE_TYPE *NODE_PTR;
+ typedef NODE_TYPE *NODE_PTR;
 
-typedef struct
-{
-	NODE_TYPE *rear;
-	NODE_TYPE *front;
-}Q_TYPE;
+ typedef struct
+ {
+ 	NODE_TYPE *rear;
+ 	NODE_TYPE *front;
+ }Q_TYPE;
 
-Q_TYPE queue;
+ Q_TYPE queue;
 
  sem_t *full;
  sem_t *empty;
@@ -143,42 +143,9 @@ Q_TYPE queue;
  	socklen_t client_name_len = sizeof(client_name);
  	int port,n;
 
- 	shmid = shmget(IPC_PRIVATE, sizeof(config),IPC_CREAT|0700);
- 	conf = (config*)shmat(shmid,NULL,0);
-
- 	if((m_queue = msgget(IPC_PRIVATE,IPC_CREAT|0700)) < 0){
- 		printf("Error initializing message queue.\n");
- 	}
- 	else{
- 		printf("Created message queue.\n");
- 	}
-
  	signal(SIGINT,catch_ctrlc);
  	signal(SIGHUP,catch_hangup);
 
- 	//create configuration process
- 	if((configuration=fork())==0){
- 		conf_manager();
- 	}
- 	else if(configuration<0){
- 		printf("Error creating configuration process.\n");
- 		exit(-1);
- 	}
- 	else{
- 		wait(NULL);
- 	}
-
- 	//create statistics process
- 	if((statistics=fork())==0){
- 		stats_manager();
- 	}
- 	else if(statistics<0){
- 		printf("Error creating statitstics process.\n");
- 		exit(-1);
- 	}
- 	else{
- 		wait(NULL);
- 	}
 
  	port = atoi(conf->port);
  	n = atoi(conf->n);
@@ -212,11 +179,11 @@ Q_TYPE queue;
  		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR)))
  			//execute_script(new_conn);
  		{
- 		sem_wait(empty);
- 		sem_wait(mutex);
- 		enqueue(&queue,new_conn,req_buf,0);
- 		sem_post(mutex);
- 		sem_post(full);
+ 			sem_wait(empty);
+ 			sem_wait(mutex);
+ 			enqueue(&queue,new_conn,req_buf,0);
+ 			sem_post(mutex);
+ 			sem_post(full);
  		}
  		else
 			// Search file with html page and send to client
@@ -608,7 +575,6 @@ Q_TYPE queue;
 
  void init(){
 
-
  	sem_unlink("EMPTY");
  	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,STRING);
  	sem_unlink("FULL");
@@ -656,12 +622,6 @@ Q_TYPE queue;
  	pthread_t POOL[atoi(conf->n)];
 */
  }
-
-
- 
-
-
-
  
  void define_policy(char input[STRING]){
  	if(strcmp(input,"FIFO")==0)
@@ -672,62 +632,62 @@ Q_TYPE queue;
  		policy = 2;
  }
 
-void create_queue(Q_TYPE *queue)
-{
-	queue->front = NULL;
-	queue->rear = NULL;
-}
+ void create_queue(Q_TYPE *queue)
+ {
+ 	queue->front = NULL;
+ 	queue->rear = NULL;
+ }
 
-int empty_queue(Q_TYPE *queue)
-{
-	return(queue->front == NULL ? 1 : 0);
-}
+ int empty_queue(Q_TYPE *queue)
+ {
+ 	return(queue->front == NULL ? 1 : 0);
+ }
 
-void destroy_queue(Q_TYPE *queue)
-{
-	NODE_PTR temp_ptr;
-	while(empty_queue(queue)==0)
-	{
-		temp_ptr = queue->front;
-		queue->front = queue->front->next;
-		free(temp_ptr);
-	}
-	queue->rear = NULL;
-}
+ void destroy_queue(Q_TYPE *queue)
+ {
+ 	NODE_PTR temp_ptr;
+ 	while(empty_queue(queue)==0)
+ 	{
+ 		temp_ptr = queue->front;
+ 		queue->front = queue->front->next;
+ 		free(temp_ptr);
+ 	}
+ 	queue->rear = NULL;
+ }
 
-void enqueue(Q_TYPE *queue,int sckt,char fchr[SIZE_BUF], int tp )
-{
-	NODE_PTR temp_ptr;
-	PEDIDO pedido_temp;
-	temp_ptr = (NODE_PTR) malloc (sizeof(NODE_TYPE));
-	pedido_temp.tipo_pedido  = tp;
-	pedido_temp.socket = sckt;
-	strcpy(pedido_temp.ficheiro,fchr);
-	if(temp_ptr != NULL)
-	{
-		temp_ptr->pedido = pedido_temp;
-		temp_ptr->next = NULL;
-		if(empty_queue(queue)==1)
-		{
-			queue->front = temp_ptr;
-		}
-		else queue->rear->next = temp_ptr;
-		queue->rear = temp_ptr;
-	}
-}
+ void enqueue(Q_TYPE *queue,int sckt,char fchr[SIZE_BUF], int tp )
+ {
+ 	NODE_PTR temp_ptr;
+ 	PEDIDO pedido_temp;
+ 	temp_ptr = (NODE_PTR) malloc (sizeof(NODE_TYPE));
+ 	pedido_temp.tipo_pedido  = tp;
+ 	pedido_temp.socket = sckt;
+ 	strcpy(pedido_temp.ficheiro,fchr);
+ 	if(temp_ptr != NULL)
+ 	{
+ 		temp_ptr->pedido = pedido_temp;
+ 		temp_ptr->next = NULL;
+ 		if(empty_queue(queue)==1)
+ 		{
+ 			queue->front = temp_ptr;
+ 		}
+ 		else queue->rear->next = temp_ptr;
+ 		queue->rear = temp_ptr;
+ 	}
+ }
 
-PEDIDO dequeue(Q_TYPE *queue)
-{
-	NODE_PTR temp_ptr;
-	PEDIDO pd;
-	if(empty_queue(queue) == 0)
-	{
-		temp_ptr = queue->front;
-		pd = temp_ptr->pedido;
-		queue->front = queue->front->next;
-		if(empty_queue(queue) == 1)
-			queue->rear = NULL;
-		free(temp_ptr);
-		return(pd);
-	}
-} 
+ PEDIDO dequeue(Q_TYPE *queue)
+ {
+ 	NODE_PTR temp_ptr;
+ 	PEDIDO pd;
+ 	if(empty_queue(queue) == 0)
+ 	{
+ 		temp_ptr = queue->front;
+ 		pd = temp_ptr->pedido;
+ 		queue->front = queue->front->next;
+ 		if(empty_queue(queue) == 1)
+ 			queue->rear = NULL;
+ 		free(temp_ptr);	
+ 	}
+ 	return(pd);
+ } 
