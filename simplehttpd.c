@@ -113,7 +113,6 @@
  }BUFFER;
 
  BUFFER buff;
- Q_TYPE q;
 
  sem_t *full;
  sem_t *full2;
@@ -151,6 +150,7 @@
  void enqueue(Q_TYPE *queue,int sckt,char fchr[SIZE_BUF], int tp );
  PEDIDO dequeue(Q_TYPE *queue);
  void trata_pedido(int socket,char ficheiro[SIZE_BUF] , int tipo_pedido );
+ int check_script_request(char request[STRING]);
 
  int main(int argc, char ** argv)
  {
@@ -475,7 +475,6 @@
 
  void catch_hangup(int sig){
  	printf("Catched SIGHUP.\n");
- 	cleanup();
  	read_conf();
  }
 
@@ -534,8 +533,10 @@
  }
 
  void stats_manager(){
+ 	int n_static, n_dynamic, n_refused;
 
  	signal(SIGHUP,display_stats);
+
 
  }
 
@@ -603,6 +604,20 @@
  	sem_close(mutex);
  }
 
+ int check_script_request(char request[STRING]){
+
+ 	char *token;
+ 	token = strtok(conf->script,",");
+ 	while(token != NULL){
+ 		printf("%s\n",token);
+ 		if(strcmp(token,request)==0)
+ 			return 1;
+ 		token = strtok(NULL,",");
+ 	}
+ 	return 0;
+ }
+
+
  void init(){
 
  	create_queue(&(buff.queue_principal));
@@ -645,7 +660,7 @@
  	}
 
  	sem_unlink("EMPTY");
- 	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,0);
+ 	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,atoi(conf->n)*2);
  	sem_unlink("FULL");
  	full = sem_open("FULL",O_CREAT|O_EXCL,0700,0);
  	sem_unlink("FULL2");
@@ -657,7 +672,7 @@
  }
  
  void define_policy(char input[STRING]){
- 	printf("PP = |%s|",input);
+ 	//printf("PP = |%s|",input);
  	if(strcmp(input,"FIFO\n")==0)
  		policy = FIFO;
  	else if(strcmp(input,"STATIC\n")==0)
@@ -744,7 +759,7 @@
 
  void *sched()
  {
- 	PEDIDO pedido_temp;
+ 	PEDIDO pedido_temp;	
  	while(1){
  		if(policy == FIFO)
  		{
@@ -783,7 +798,8 @@
  	printf("\npolicy: %d\n",policy);
  	int valor_sem;
  	sem_getvalue(full,&valor_sem);
- 	if(valor_sem!=0){
+ 	printf("\n\nvalor sem: %d\n\n ", valor_sem);
+ 	if(valor_sem!=atoi(conf->n)*2){
  	if(policy==FIFO)
  	{
  		sem_wait(empty);
@@ -814,7 +830,7 @@
  			sem_post(full);	
  		}
  	}
- 	else if(policy = PRIORIDADE_DINAMICO)
+ 	else if(policy == PRIORIDADE_DINAMICO)
  	{
  		if(tipo_ == PEDIDO_DINAMICO)
  		{
@@ -839,6 +855,7 @@
  else
  {
  	send_page(skt,"indisponivel.html");
- }
+ 	close(skt);
+ }}
 
- }
+ 
