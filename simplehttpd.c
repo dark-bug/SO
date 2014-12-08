@@ -24,6 +24,7 @@
 #include <sys/msg.h>
 #include <fcntl.h>
 #include <semaphore.h>
+#include <pthread.h>
 
 // Produce debug information
 #define DEBUG	  	1	
@@ -41,6 +42,12 @@
 #define STATS_FILE "stats.txt"
 #define DELIMITATOR "="
 #define COMMA ","
+#define PEDIDO_ESTATICO 0
+#define PEDIDO_DINAMICO 1
+
+#define FIFO 0
+#define PRIORIDADE_ESTATICO 1
+#define PRIORIDADE_DINAMICO 2
 
  char buf[SIZE_BUF];
  char req_buf[SIZE_BUF];
@@ -49,6 +56,7 @@
  pid_t configuration;
  pid_t statistics;
  time_t server_init_time;
+ int conta_pedidos;
 
 
 
@@ -80,6 +88,7 @@
  	int socket;
  	char ficheiro[SIZE_BUF];
  	int tipo_pedido;
+ 	int n_pedido;
  } PEDIDO;
  
  typedef struct node_type
@@ -96,11 +105,21 @@
  	NODE_TYPE *front;
  }Q_TYPE;
 
- Q_TYPE queue;
+ typedef struct buffer
+ {
+ 	Q_TYPE queue_principal;
+ 	Q_TYPE queue_prioridade;
+ 	PEDIDO prox_ped_atender;
+ }BUFFER;
+
+ BUFFER buff;
+ Q_TYPE q;
 
  sem_t *full;
+ sem_t *full2;
  sem_t *empty;
  sem_t *mutex;
+ sem_t *mutex2;
 
  time_t timestamp();
  int  fireup(int port);
@@ -108,7 +127,7 @@
  void get_request(int socket);
  int  read_line(int socket, int n);
  void send_header(int socket);
- void send_page(int socket);
+ void send_page(int socket, char ficheiro[SIZE_BUF]);
  void execute_script(int socket);
  void not_found(int socket);
  void catch_ctrlc(int);
@@ -123,7 +142,7 @@
  void display_stats();
  void do_stats();
  void *sched();
- void *workers(void* id_thread);
+ void *workers();
  void init();
  void define_policy(char policy[STRING]);
  void create_queue(Q_TYPE *queue);
@@ -131,11 +150,17 @@
  void destroy_queue(Q_TYPE *queue);
  void enqueue(Q_TYPE *queue,int sckt,char fchr[SIZE_BUF], int tp );
  PEDIDO dequeue(Q_TYPE *queue);
+ void trata_pedido(int socket,char ficheiro[SIZE_BUF] , int tipo_pedido );
 
  int main(int argc, char ** argv)
  {
+ 	int i;
+
  	init();
  	
+ 	pthread_t SCHEDULER;
+ 	pthread_t POOL[atoi(conf->n)];
+
  	server_init_time = timestamp();
  	printf("%s",asctime(localtime(&server_init_time)));
 
@@ -149,7 +174,12 @@
 
  	port = atoi(conf->port);
  	n = atoi(conf->n);
-
+ 	
+ 	pthread_create(&SCHEDULER,NULL,sched,NULL);
+ 	for(i = 0;i<atoi(conf->n);i++)
+ 	{
+ 		pthread_create(&POOL[i],NULL,workers,NULL);
+ 	}
  	printf("Listening for HTTP requests on port %d\n",port);
  	printf("We'll be having %d threads in pool\n",n);
  	printf("Scheduler follows %s",conf->policy);
@@ -179,26 +209,24 @@
  		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR)))
  			//execute_script(new_conn);
  		{
- 			sem_wait(empty);
- 			sem_wait(mutex);
- 			enqueue(&queue,new_conn,req_buf,0);
- 			sem_post(mutex);
- 			sem_post(full);
+ 			trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
  		}
  		else
 			// Search file with html page and send to client
  			//send_page(new_conn);
  		{
- 			sem_wait(empty);
- 			sem_wait(mutex);
- 			enqueue(&queue,new_conn,req_buf,1);
- 			sem_post(mutex);
- 			sem_post(full);
+ 			trata_pedido(new_conn,req_buf,PEDIDO_ESTATICO);
  		}
 
 		// Terminate connection with client 
- 		close(new_conn);
+ 		//close(new_conn);
 
+ 	}
+
+ 	pthread_join(SCHEDULER,NULL);
+ 	for(i = 0;i<atoi(conf->n);i++)
+ 	{
+ 		pthread_join(POOL[i],NULL);
  	}
 
  }
@@ -267,12 +295,12 @@
 
 
 // Send html page to client
- void send_page(int socket)
+ void send_page(int socket,char ficheiro[SIZE_BUF])
  {
  	FILE * fp;
 
 	// Searchs for page in directory htdocs
- 	sprintf(buf_tmp,"htdocs/%s",req_buf);
+ 	sprintf(buf_tmp,"htdocs/%s",ficheiro);
 
 	#if DEBUG
  	printf("send_page: searching for %s\n",buf_tmp);
@@ -447,6 +475,7 @@
 
  void catch_hangup(int sig){
  	printf("Catched SIGHUP.\n");
+ 	cleanup();
  	read_conf();
  }
 
@@ -486,7 +515,7 @@
  				memcpy(conf->n,temp,strlen(temp));
  				break;
  				case 3:
- 				memcpy(conf->policy,temp,strlen(temp));
+ 				memcpy(conf->policy,temp,strlen(temp)); 
  				break;
  				case 4:
  				memcpy(conf->script,temp,strlen(temp));
@@ -567,22 +596,19 @@
  	shmctl(shmid,IPC_RMID,NULL);
  	//removing the queue
  	msgctl(m_queue,IPC_RMID,0);
+ 	destroy_queue(&buff.queue_prioridade);
+ 	destroy_queue(&buff.queue_principal);
  	sem_close(empty);
  	sem_close(full);
  	sem_close(mutex);
- 	destroy_queue(&queue);
  }
 
  void init(){
 
- 	sem_unlink("EMPTY");
- 	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,STRING);
- 	sem_unlink("FULL");
- 	full = sem_open("FULL",O_CREAT|O_EXCL,0700,0);
- 	sem_unlink("MUTEX");
- 	mutex = sem_open("MUTEX",O_CREAT|O_EXCL,0700,1);
+ 	create_queue(&(buff.queue_principal));
+ 	create_queue(&(buff.queue_prioridade));
 
- 	create_queue(&queue);
+ 	conta_pedidos=0;
 
  	shmid = shmget(IPC_PRIVATE, sizeof(config),IPC_CREAT|0700);
  	conf = (config*)shmat(shmid,NULL,0);
@@ -618,18 +644,26 @@
  		wait(NULL);
  	}
 
- 	/*pthread_t SCHEDULER;
- 	pthread_t POOL[atoi(conf->n)];
-*/
+ 	sem_unlink("EMPTY");
+ 	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,0);
+ 	sem_unlink("FULL");
+ 	full = sem_open("FULL",O_CREAT|O_EXCL,0700,0);
+ 	sem_unlink("FULL2");
+ 	full2 = sem_open("FULL2",O_CREAT|O_EXCL,0700,0);
+ 	sem_unlink("MUTEX");
+ 	mutex = sem_open("MUTEX",O_CREAT|O_EXCL,0700,1);
+ 	sem_unlink("MUTEX2");
+ 	mutex2 = sem_open("MUTEX2",O_CREAT|O_EXCL,0700,1);
  }
  
  void define_policy(char input[STRING]){
- 	if(strcmp(input,"FIFO")==0)
- 		policy = 0;
- 	if(strcmp(input,"STATIC")==0)
- 		policy = 1;
- 	if(strcmp(input,"DYNAMIC")==0)
- 		policy = 2;
+ 	printf("PP = |%s|",input);
+ 	if(strcmp(input,"FIFO\n")==0)
+ 		policy = FIFO;
+ 	else if(strcmp(input,"STATIC\n")==0)
+ 		policy = PRIORIDADE_ESTATICO;
+ 	else if(strcmp(input,"DYNAMIC\n")==0)
+ 		policy = PRIORIDADE_DINAMICO;
  }
 
  void create_queue(Q_TYPE *queue)
@@ -662,6 +696,8 @@
  	temp_ptr = (NODE_PTR) malloc (sizeof(NODE_TYPE));
  	pedido_temp.tipo_pedido  = tp;
  	pedido_temp.socket = sckt;
+ 	pedido_temp.n_pedido = conta_pedidos;
+ 	conta_pedidos++;
  	strcpy(pedido_temp.ficheiro,fchr);
  	if(temp_ptr != NULL)
  	{
@@ -691,3 +727,118 @@
  	}
  	return(pd);
  } 
+
+
+
+ void *workers()
+ {
+ 	while(1){
+
+ 		sem_wait(full2);
+ 		send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
+ 		printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
+ 		close(buff.prox_ped_atender.socket);
+ 	}
+
+ }
+
+ void *sched()
+ {
+ 	PEDIDO pedido_temp;
+ 	while(1){
+ 		if(policy == FIFO)
+ 		{
+ 			sem_wait(full);
+ 			sem_wait(mutex);
+ 			pedido_temp = dequeue(&buff.queue_principal);
+ 			buff.prox_ped_atender = pedido_temp;
+ 			sem_post(full2);
+ 			sem_post(mutex);
+ 			sem_wait(empty);
+ 		}
+ 		else
+ 		{
+ 			sem_wait(full);
+ 			sem_wait(mutex);
+ 			if(empty_queue(&buff.queue_prioridade)==0)
+ 			{
+ 				pedido_temp = dequeue(&buff.queue_prioridade);
+ 				buff.prox_ped_atender = pedido_temp;
+ 			}
+ 			else
+ 			{
+ 				pedido_temp = dequeue(&buff.queue_principal);
+ 				buff.prox_ped_atender = pedido_temp;	
+ 			}
+ 			sem_post(full2);
+ 			sem_post(mutex);
+ 			sem_wait(empty);
+ 		}
+ 	}
+}
+ 
+
+ void trata_pedido(int skt,char fich[SIZE_BUF] , int tipo_ )
+ {
+ 	printf("\npolicy: %d\n",policy);
+ 	int valor_sem;
+ 	sem_getvalue(full,&valor_sem);
+ 	if(valor_sem!=0){
+ 	if(policy==FIFO)
+ 	{
+ 		sem_wait(empty);
+ 		sem_wait(mutex);
+ 		printf("\nPedido Colocado na fila principal...\n");
+ 		enqueue(&buff.queue_principal,skt,fich,tipo_);
+ 		sem_post(mutex);
+ 		sem_post(full);
+ 	}
+ 	else if(policy == PRIORIDADE_ESTATICO)
+ 	{
+ 		if(tipo_ == PEDIDO_ESTATICO)
+ 		{
+ 			sem_wait(empty);
+ 			sem_wait(mutex);
+ 			printf("\nPedido estatico colocado na fila prioritaria!\n");
+ 			enqueue(&buff.queue_prioridade,skt,fich,tipo_);
+ 			sem_post(mutex);
+ 			sem_post(full);
+ 		}
+ 		else
+ 		{
+ 			sem_wait(empty);
+ 			sem_wait(mutex);
+ 			printf("\nPedido dinamico colocado na fila normal!\n");
+ 			enqueue(&buff.queue_principal,skt,fich,tipo_);
+ 			sem_post(mutex);
+ 			sem_post(full);	
+ 		}
+ 	}
+ 	else if(policy = PRIORIDADE_DINAMICO)
+ 	{
+ 		if(tipo_ == PEDIDO_DINAMICO)
+ 		{
+ 			sem_wait(empty);
+ 			sem_wait(mutex);
+ 			printf("\nPedido dinamico colocado na fila prioritaria!\n");
+ 			enqueue(&buff.queue_prioridade,skt,fich,tipo_);
+ 			sem_post(mutex);
+ 			sem_post(full);
+ 		}
+ 		else
+ 		{
+ 			sem_wait(empty);
+ 			sem_wait(mutex);
+ 			printf("\nPedido estatico colocado na fila normal!\n");
+ 			enqueue(&buff.queue_prioridade,skt,fich,tipo_);
+ 			sem_post(mutex);
+ 			sem_post(full);
+ 		}
+ 	}
+ }
+ else
+ {
+ 	send_page(skt,"indisponivel.html");
+ }
+
+ }
