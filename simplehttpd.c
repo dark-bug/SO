@@ -139,7 +139,6 @@
  void cleanup();
  void write_stats();
  void display_stats();
- void do_stats();
  void *sched();
  void *workers();
  void init();
@@ -533,7 +532,7 @@
  }
 
  void stats_manager(){
- 	int n_static, n_dynamic, n_refused;
+
 
  	signal(SIGHUP,display_stats);
 
@@ -586,10 +585,6 @@
 
  }
 
- void do_stats(int n){
- 	//int output;
-	//do a switch that receives 1-static 2-dynamic 3-refused and runs the message queue checking and incrementing if matches
- }
 
  void cleanup(){
  	//cleaning shared memory
@@ -751,6 +746,7 @@
 
  		sem_wait(full2);
  		send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
+ 		request_to_queue()
  		printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
  		close(buff.prox_ped_atender.socket);
  	}
