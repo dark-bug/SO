@@ -44,7 +44,7 @@
 #define COMMA ","
 #define PEDIDO_ESTATICO 0
 #define PEDIDO_DINAMICO 1
-
+#define PIPE_NAME "one_pipe_to_rule_them_all"
 #define FIFO 0
 #define PRIORIDADE_ESTATICO 1
 #define PRIORIDADE_DINAMICO 2
@@ -54,10 +54,9 @@
  char buf_tmp[SIZE_BUF];
  int socket_conn,new_conn, m_queue,shmid,policy;
  pid_t configuration;
- pid_t statistics;
+ pid_t childs[2];
  time_t server_init_time;
- int conta_pedidos;
-
+ int conta_pedidos, fd[2];
 
 
  time_t timestamp(){
@@ -79,7 +78,7 @@
  	long mtype;
  	char request_type[STRING];
  	char filename[STRING];
- 	char thread_number[STRING];
+ 	int thread_number;
  	char reception_time[STRING],conclusion_time[STRING];
  }stats;
 
@@ -89,6 +88,8 @@
  	char ficheiro[SIZE_BUF];
  	int tipo_pedido;
  	int n_pedido;
+ 	int id_thread;
+ 	char reception_time[STRING];
  } PEDIDO;
  
  typedef struct node_type
@@ -140,7 +141,7 @@
  void write_stats();
  void display_stats();
  void *sched();
- void *workers();
+ void *workers(void* idp);
  void init();
  void define_policy(char policy[STRING]);
  void create_queue(Q_TYPE *queue);
@@ -150,6 +151,8 @@
  PEDIDO dequeue(Q_TYPE *queue);
  void trata_pedido(int socket,char ficheiro[SIZE_BUF] , int tipo_pedido );
  int check_script_request(char request[STRING]);
+ stats prepare_stats();
+
 
  int main(int argc, char ** argv)
  {
@@ -173,7 +176,8 @@
 
  	port = atoi(conf->port);
  	n = atoi(conf->n);
- 	
+ 	//int id [atoi(conf->n)];
+
  	pthread_create(&SCHEDULER,NULL,sched,NULL);
  	for(i = 0;i<atoi(conf->n);i++)
  	{
@@ -183,7 +187,11 @@
  	printf("We'll be having %d threads in pool\n",n);
  	printf("Scheduler follows %s",conf->policy);
 
-
+ 	if((childs[0]=fork())==0){
+ 		printf("Initializing statistics manager\n");
+ 		stats_manager();
+ 		exit(0);
+ 	}
 
 	// Configure listening port
  	if ((socket_conn=fireup(port))==-1)
@@ -203,6 +211,7 @@
 
 		// Process request
  		get_request(new_conn);
+
 
 		// Verify if request is for a page or script
  		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR)))
@@ -468,6 +477,7 @@
  {
  	printf("Server terminating\n");
  	close(socket_conn);
+ 	//display_stats();
  	cleanup();
  	exit(0);
  }
@@ -482,9 +492,11 @@
  	read_conf();
  	define_policy(conf->policy);
  	//add to sleep
+ 	
  }
  
  void read_conf(){
+
  	FILE *f = fopen(CONF_FILE,"r");
 
  	if(f)
@@ -533,10 +545,20 @@
 
  void stats_manager(){
 
+ 	//signal(SIGINT,display_stats);
+ 	write_stats();
+ }
 
- 	signal(SIGHUP,display_stats);
-
-
+ stats prepare_stats(){
+ 	stats aux;
+ 	aux.mtype=1;
+ 	if(buff.prox_ped_atender.tipo_pedido == PEDIDO_ESTATICO)
+ 		strcpy(aux.request_type,"ESTATICO");
+ 	strcpy(aux.filename,buff.prox_ped_atender.ficheiro);
+ 	aux.thread_number = buff.prox_ped_atender.id_thread;
+ 	time_t current_time = timestamp();
+ 	strcpy(aux.conclusion_time,asctime(localtime(&current_time)));
+ 	return aux;
  }
 
 
@@ -551,11 +573,13 @@
  		printf("Something went wrong, can't write the stats file!\n");
  		exit(1);
  	}
-
- 	if(msgrcv(m_queue,&aux,sizeof(aux),1,0)){
+ 	
+ 	while(1){
+ 		msgrcv(m_queue,&aux,sizeof(aux),0,0);
  		printf("Received message.\nWriting to file.\n");
- 		printf("%s,%s,%s,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
- 		fprintf(f,"%s,%s,%s,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 		printf("%s,%s,%d,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 		fprintf(f,"%s,%s,%d,%s,%s",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 		printf("Written to file.\n");
  	}
 
  	fclose(f);
@@ -633,6 +657,7 @@
 //create configuration process
  	if((configuration=fork())==0){
  		conf_manager();
+ 		exit(0);
  	}
  	else if(configuration<0){
  		printf("Error creating configuration process.\n");
@@ -643,16 +668,7 @@
  	}
 
  	//create statistics process
- 	if((statistics=fork())==0){
- 		stats_manager();
- 	}
- 	else if(statistics<0){
- 		printf("Error creating statitstics process.\n");
- 		exit(-1);
- 	}
- 	else{
- 		wait(NULL);
- 	}
+ 	
 
  	sem_unlink("EMPTY");
  	empty = sem_open("EMPTY",O_CREAT|O_EXCL,0700,atoi(conf->n)*2);
@@ -707,6 +723,8 @@
  	pedido_temp.tipo_pedido  = tp;
  	pedido_temp.socket = sckt;
  	pedido_temp.n_pedido = conta_pedidos;
+ 	time_t current_time = timestamp();
+ 	strcpy(pedido_temp.reception_time,asctime(localtime(&current_time)));
  	conta_pedidos++;
  	strcpy(pedido_temp.ficheiro,fchr);
  	if(temp_ptr != NULL)
@@ -740,17 +758,19 @@
 
 
 
- void *workers()
+ void *workers(void *idp)
  {
  	while(1){
-
+ 		
  		sem_wait(full2);
- 		send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
- 		request_to_queue()
- 		printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
- 		close(buff.prox_ped_atender.socket);
+ 		if(strcmp(buff.prox_ped_atender.ficheiro,"favicon.ico")!=0){
+ 			send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
+ 			stats temp = prepare_stats();
+ 			request_to_queue(temp);
+ 			printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
+ 			close(buff.prox_ped_atender.socket);
+ 		}
  	}
-
  }
 
  void *sched()
@@ -765,7 +785,7 @@
  			buff.prox_ped_atender = pedido_temp;
  			sem_post(full2);
  			sem_post(mutex);
- 			sem_wait(empty);
+ 			sem_post(empty);
  		}
  		else
  		{
@@ -783,10 +803,10 @@
  			}
  			sem_post(full2);
  			sem_post(mutex);
- 			sem_wait(empty);
+ 			sem_post(empty);
  		}
  	}
-}
+ }
  
 
  void trata_pedido(int skt,char fich[SIZE_BUF] , int tipo_ )
@@ -796,62 +816,67 @@
  	sem_getvalue(full,&valor_sem);
  	printf("\n\nvalor sem: %d\n\n ", valor_sem);
  	if(valor_sem!=atoi(conf->n)*2){
- 	if(policy==FIFO)
- 	{
- 		sem_wait(empty);
- 		sem_wait(mutex);
- 		printf("\nPedido Colocado na fila principal...\n");
- 		enqueue(&buff.queue_principal,skt,fich,tipo_);
- 		sem_post(mutex);
- 		sem_post(full);
- 	}
- 	else if(policy == PRIORIDADE_ESTATICO)
- 	{
- 		if(tipo_ == PEDIDO_ESTATICO)
+ 		if(policy==FIFO)
  		{
  			sem_wait(empty);
  			sem_wait(mutex);
- 			printf("\nPedido estatico colocado na fila prioritaria!\n");
- 			enqueue(&buff.queue_prioridade,skt,fich,tipo_);
- 			sem_post(mutex);
- 			sem_post(full);
- 		}
- 		else
- 		{
- 			sem_wait(empty);
- 			sem_wait(mutex);
- 			printf("\nPedido dinamico colocado na fila normal!\n");
+ 			printf("\nPedido Colocado na fila principal...\n");
  			enqueue(&buff.queue_principal,skt,fich,tipo_);
  			sem_post(mutex);
- 			sem_post(full);	
+ 			sem_post(full);
+ 		}
+ 		else if(policy == PRIORIDADE_ESTATICO)
+ 		{
+ 			if(tipo_ == PEDIDO_ESTATICO)
+ 			{
+ 				sem_wait(empty);
+ 				sem_wait(mutex);
+ 				printf("\nPedido estatico colocado na fila prioritaria!\n");
+ 				enqueue(&buff.queue_prioridade,skt,fich,tipo_);
+ 				sem_post(mutex);
+ 				sem_post(full);
+ 			}
+ 			else
+ 			{
+ 				sem_wait(empty);
+ 				sem_wait(mutex);
+ 				printf("\nPedido dinamico colocado na fila normal!\n");
+ 				enqueue(&buff.queue_principal,skt,fich,tipo_);
+ 				sem_post(mutex);
+ 				sem_post(full);	
+ 			}
+ 		}
+ 		else if(policy == PRIORIDADE_DINAMICO)
+ 		{
+ 			if(tipo_ == PEDIDO_DINAMICO)
+ 			{
+ 				sem_wait(empty);
+ 				sem_wait(mutex);
+ 				printf("\nPedido dinamico colocado na fila prioritaria!\n");
+ 				enqueue(&buff.queue_prioridade,skt,fich,tipo_);
+ 				sem_post(mutex);
+ 				sem_post(full);
+ 			}
+ 			else
+ 			{
+ 				sem_wait(empty);
+ 				sem_wait(mutex);
+ 				printf("\nPedido estatico colocado na fila normal!\n");
+ 				enqueue(&buff.queue_prioridade,skt,fich,tipo_);
+ 				sem_post(mutex);
+ 				sem_post(full);
+ 			}
  		}
  	}
- 	else if(policy == PRIORIDADE_DINAMICO)
+ 	else
  	{
- 		if(tipo_ == PEDIDO_DINAMICO)
- 		{
- 			sem_wait(empty);
- 			sem_wait(mutex);
- 			printf("\nPedido dinamico colocado na fila prioritaria!\n");
- 			enqueue(&buff.queue_prioridade,skt,fich,tipo_);
- 			sem_post(mutex);
- 			sem_post(full);
- 		}
- 		else
- 		{
- 			sem_wait(empty);
- 			sem_wait(mutex);
- 			printf("\nPedido estatico colocado na fila normal!\n");
- 			enqueue(&buff.queue_prioridade,skt,fich,tipo_);
- 			sem_post(mutex);
- 			sem_post(full);
- 		}
+ 		send_page(skt,"indisponivel.html");
+ 		close(skt);
  	}
  }
- else
- {
- 	send_page(skt,"indisponivel.html");
- 	close(skt);
- }}
 
- 
+
+
+
+
+

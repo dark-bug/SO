@@ -1,3 +1,1 @@
-estatico,badjoras.html,3,ola,ole
-estatico,badjoras.html,3,puta,Fri Nov 21 05:52:45 2014
-
+ESTATICO,index.html,0,ê‘£Ÿg,Wed Dec 10 15:15:45 2014

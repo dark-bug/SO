@@ -1,4 +1,4 @@
-port=6010
-n=15
-policy=FIFO
+port=8020
+n=5
+policy=STATIC
 scripts=h.sh,zim.sh,foo.sh,
