@@ -152,6 +152,7 @@
  void trata_pedido(int socket,char ficheiro[SIZE_BUF] , int tipo_pedido );
  int check_script_request(char request[STRING]);
  stats prepare_stats();
+ int trata_dinamico(PEDIDO req);
 
 
  int main(int argc, char ** argv)
@@ -214,10 +215,14 @@
 
 
 		// Verify if request is for a page or script
- 		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR)))
- 			//execute_script(new_conn);
- 		{
- 			trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
+ 		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
+ 			if(check_script_request(req_buf)==1){
+ 				trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
+ 			}
+ 			else{
+ 				printf("Cannot execute. Unauthorized script.\n");
+ 			
+ 			}
  		}
  		else
 			// Search file with html page and send to client
@@ -764,11 +769,18 @@
  		
  		sem_wait(full2);
  		if(strcmp(buff.prox_ped_atender.ficheiro,"favicon.ico")!=0){
- 			send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
+ 			if((buff.prox_ped_atender.tipo_pedido) == PEDIDO_ESTATICO){
+ 				send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
+ 			}
+ 			else{
+ 				trata_dinamico(buff.prox_ped_atender);
+ 			}
+
  			stats temp = prepare_stats();
  			request_to_queue(temp);
  			printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
  			close(buff.prox_ped_atender.socket);
+ 			
  		}
  	}
  }
@@ -874,6 +886,40 @@
  		close(skt);
  	}
  }
+
+ int trata_dinamico(PEDIDO req){
+ 	int fd[2],n=0;
+ 	char aux[STRING];
+ 	char aux_buff[SIZE_BUF];
+ 	pid_t proc;
+
+ 	if(pipe(fd)){
+ 		printf("Can't create pipe.\n");
+ 		cannot_execute(req.socket);
+ 		return 0;
+ 	}
+ 	if((proc=fork())==0){
+ 		dup2(fd[1],fileno(stdout));
+ 		close(fd[0]);
+ 		close(fd[1]);
+ 		execlp(aux,aux,NULL);
+ 	}
+ 	else{
+ 		close(fd[1]);
+ 		do{
+ 			n = read(fd[0],aux_buff,sizeof(aux_buff));
+ 			if(n>0){
+ 				aux_buff[n] = '\0';
+ 				send(req.socket,aux_buff,strlen(aux_buff),0);
+ 			}
+ 		}while(n>0);
+ 	}
+ 	waitpid(proc,NULL,0);
+ 	return 1;
+ }
+
+
+
 
 
 
