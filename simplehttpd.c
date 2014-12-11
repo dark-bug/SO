@@ -219,18 +219,22 @@
 
 
 		// Verify if request is for a page or script
- 		//if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
  		int res = check_script_request(req_buf);
- 		if(res==1){
+ 		if(res==1 && strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
+ 			printf("Entrei nos dinamicos\n");
  			trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
  		}
-
- 		
- 		else
-			// Search file with html page and send to client
- 			//send_page(new_conn);
+ 		else if(res==0 && strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR)))
+				// Search file with html page and send to client
+	 			//send_page(new_conn);
  		{
+ 			
+			printf("Entrei nos estaticos\n");
  			trata_pedido(new_conn,req_buf,PEDIDO_ESTATICO);
+ 		}
+ 		else{
+ 			printf("Can't handle it.\n");
+ 			cannot_execute(new_conn);
  		}
 
 		// Terminate connection with client 
@@ -586,6 +590,7 @@
  	}
  	
  	while(1){
+ 		f=fopen(STATS_FILE,"a");
  		msgrcv(m_queue,&aux,sizeof(aux),0,0);
  		printf("Received message.\nWriting to file.\n");
  		strtok(aux.reception_time, "\n");
@@ -599,8 +604,9 @@
  			fprintf(f,"%s,%s,%d,%s,%s \n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
  			printf("Written to file.\n");
  		}
+ 		fclose(f);
  	}
- 	fclose(f);
+ 	
  	
  }
 
@@ -648,7 +654,6 @@
  	char *token;
  	token = strtok(conf->script,",");
  	while(token != NULL){
- 		printf("%s\n",token);
  		if(strcmp(token,request)==0)
  			return 1;
  		token = strtok(NULL,",");
@@ -792,14 +797,19 @@
  		buff.prox_ped_atender.id_thread = *((int*)id);
  		if((buff.prox_ped_atender.tipo_pedido) == PEDIDO_ESTATICO){
  			send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
+ 			stats temp = prepare_stats();
+ 			request_to_queue(temp);
+ 			printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
+ 			close(buff.prox_ped_atender.socket);
  		}
  		else{
  			trata_dinamico(buff.prox_ped_atender);
+ 			stats temp = prepare_stats();
+ 			request_to_queue(temp);
+ 			printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
+ 			close(buff.prox_ped_atender.socket);
  		}
- 		stats temp = prepare_stats();
- 		request_to_queue(temp);
- 		printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
- 		close(buff.prox_ped_atender.socket);
+ 		
 
  		
  	}

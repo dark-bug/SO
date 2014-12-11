@@ -1,4 +1,4 @@
-port=8040
+port=8020
 n=2
 policy=STATIC
 scripts=hello.sh,
