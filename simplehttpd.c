@@ -141,7 +141,7 @@
  void write_stats();
  void display_stats();
  void *sched();
- void *workers(void* idp);
+ void *workers(void* id);
  void init();
  void define_policy(char policy[STRING]);
  void create_queue(Q_TYPE *queue);
@@ -179,10 +179,12 @@
  	n = atoi(conf->n);
  	//int id [atoi(conf->n)];
 
+ 	int id[atoi(conf->n)];
  	pthread_create(&SCHEDULER,NULL,sched,NULL);
  	for(i = 0;i<atoi(conf->n);i++)
  	{
- 		pthread_create(&POOL[i],NULL,workers,NULL);
+ 		id[i] = i;
+ 		pthread_create(&POOL[i],NULL,workers,&id[i]);
  	}
  	printf("Listening for HTTP requests on port %d\n",port);
  	printf("We'll be having %d threads in pool\n",n);
@@ -198,7 +200,7 @@
  	if ((socket_conn=fireup(port))==-1)
  		exit(1);
 
-	// Serve requests 
+	// Serve requests 	
  	while (1)
  	{
 		// Accept connection on socket
@@ -215,15 +217,12 @@
 
 
 		// Verify if request is for a page or script
- 		if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
- 			if(check_script_request(req_buf)==1){
- 				trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
- 			}
- 			else{
- 				printf("Cannot execute. Unauthorized script.\n");
- 			
- 			}
- 		}
+ 		//if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
+ 		int res = check_script_request(req_buf);
+ 		if(res==1){
+ 			trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
+ 		} 		
+ 		
  		else
 			// Search file with html page and send to client
  			//send_page(new_conn);
@@ -560,6 +559,7 @@
  	if(buff.prox_ped_atender.tipo_pedido == PEDIDO_ESTATICO)
  		strcpy(aux.request_type,"ESTATICO");
  	strcpy(aux.filename,buff.prox_ped_atender.ficheiro);
+ 	strcpy(aux.reception_time,buff.prox_ped_atender.reception_time);
  	aux.thread_number = buff.prox_ped_atender.id_thread;
  	time_t current_time = timestamp();
  	strcpy(aux.conclusion_time,asctime(localtime(&current_time)));
@@ -582,8 +582,9 @@
  	while(1){
  		msgrcv(m_queue,&aux,sizeof(aux),0,0);
  		printf("Received message.\nWriting to file.\n");
+ 		strtok(aux.reception_time, "\n");
  		printf("%s,%s,%d,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
- 		fprintf(f,"%s,%s,%d,%s,%s",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 		fprintf(f,"%s,%s,%d,%s,%s \n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
  		printf("Written to file.\n");
  	}
 
@@ -728,8 +729,10 @@
  	pedido_temp.tipo_pedido  = tp;
  	pedido_temp.socket = sckt;
  	pedido_temp.n_pedido = conta_pedidos;
+
  	time_t current_time = timestamp();
  	strcpy(pedido_temp.reception_time,asctime(localtime(&current_time)));
+
  	conta_pedidos++;
  	strcpy(pedido_temp.ficheiro,fchr);
  	if(temp_ptr != NULL)
@@ -763,11 +766,12 @@
 
 
 
- void *workers(void *idp)
+ void *workers(void *id)
  {
  	while(1){
- 		
+
  		sem_wait(full2);
+ 		buff.prox_ped_atender.id_thread = *((int*)id);
  		if(strcmp(buff.prox_ped_atender.ficheiro,"favicon.ico")!=0){
  			if((buff.prox_ped_atender.tipo_pedido) == PEDIDO_ESTATICO){
  				send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
@@ -775,7 +779,6 @@
  			else{
  				trata_dinamico(buff.prox_ped_atender);
  			}
-
  			stats temp = prepare_stats();
  			request_to_queue(temp);
  			printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
@@ -892,7 +895,8 @@
  	char aux[STRING];
  	char aux_buff[SIZE_BUF];
  	pid_t proc;
-
+ 	sprintf(aux,"scripts/%s",req.ficheiro);
+ 	printf("%s",aux);
  	if(pipe(fd)){
  		printf("Can't create pipe.\n");
  		cannot_execute(req.socket);
@@ -902,6 +906,7 @@
  		dup2(fd[1],fileno(stdout));
  		close(fd[0]);
  		close(fd[1]);
+
  		execlp(aux,aux,NULL);
  	}
  	else{
@@ -910,6 +915,7 @@
  			n = read(fd[0],aux_buff,sizeof(aux_buff));
  			if(n>0){
  				aux_buff[n] = '\0';
+ 				printf("%s",aux_buff);
  				send(req.socket,aux_buff,strlen(aux_buff),0);
  			}
  		}while(n>0);

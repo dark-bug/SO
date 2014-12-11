@@ -1,26 +1,100 @@
-ESTATICO,index.html,0,ê‰?O¸,Wed Dec 10 18:07:07 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:33 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:35 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:36 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:36 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:36 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:37 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:37 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:37 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:37 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:37 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:38 2014
-ESTATICO,index.html,0,ê§¸≠J,Wed Dec 10 18:20:38 2014
-ESTATICO,index.html,0,êîF†&,Wed Dec 10 18:40:48 2014
-ESTATICO,index.html,0,êîF†&,Wed Dec 10 18:40:50 2014
-ESTATICO,index.html,0,êîF†&,Wed Dec 10 18:40:51 2014
-ESTATICO,index.html,0,êîF†&,Wed Dec 10 18:40:51 2014
-ESTATICO,cgi_bin/zim.sh,0,,Wed Dec 10 19:00:45 2014
-ESTATICO,cgi_bin/foo.sh,0,@V`,Wed Dec 10 19:00:53 2014
-ESTATICO,foo.sh,0,@V`,Wed Dec 10 19:01:06 2014
-ESTATICO,hello.sh,0,,Wed Dec 10 22:38:44 2014
-ESTATICO,hello.sh,0,,Wed Dec 10 22:43:07 2014
-ESTATICO,index.html,0,êD B,Wed Dec 10 22:43:16 2014
-ESTATICO,index.html,0,êD B,Wed Dec 10 22:43:49 2014
-ESTATICO,dijkstra.html,0,êD B,Wed Dec 10 22:44:06 2014
-ESTATICO,hello.sh,0,ÄV`,Wed Dec 10 22:44:43 2014
+ESTATICO,index.html,0,Thu Dec 11 11:32:10 2014,Thu Dec 11 11:32:10 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 11:46:05 2014,Thu Dec 11 11:46:05 2014
+ 
+ESTATICO,hello.sh,2,Thu Dec 11 11:46:20 2014,Thu Dec 11 11:46:20 2014
+ 
+ESTATICO,hello.sh,4,Thu Dec 11 11:46:27 2014,Thu Dec 11 11:46:27 2014
+ 
+ESTATICO,hello.sh,3,Thu Dec 11 11:46:27 2014,Thu Dec 11 11:46:27 2014
+ 
+ESTATICO,hello.sh,0,Thu Dec 11 11:46:28 2014,Thu Dec 11 11:46:28 2014
+ 
+ESTATICO,merda.sh,1,Thu Dec 11 11:46:33 2014,Thu Dec 11 11:46:33 2014
+ 
+ESTATICO,merda.sh,2,Thu Dec 11 11:46:35 2014,Thu Dec 11 11:46:35 2014
+ 
+ESTATICO,merda.sh,4,Thu Dec 11 11:46:36 2014,Thu Dec 11 11:46:36 2014
+ 
+ESTATICO,merda.sh,3,Thu Dec 11 11:46:36 2014,Thu Dec 11 11:46:36 2014
+ 
+ESTATICO,merda.sh,0,Thu Dec 11 11:46:37 2014,Thu Dec 11 11:46:37 2014
+ 
+ESTATICO,merda.sh,1,Thu Dec 11 11:46:37 2014,Thu Dec 11 11:46:37 2014
+ 
+ESTATICO,merda.sh,2,Thu Dec 11 11:46:38 2014,Thu Dec 11 11:46:38 2014
+ 
+ESTATICO,merda.sh,4,Thu Dec 11 11:46:38 2014,Thu Dec 11 11:46:38 2014
+ 
+ESTATICO,merda.sh,3,Thu Dec 11 11:46:38 2014,Thu Dec 11 11:46:38 2014
+ 
+ESTATICO,merda.sh,0,Thu Dec 11 11:46:38 2014,Thu Dec 11 11:46:38 2014
+ 
+ESTATICO,merda.sh,1,Thu Dec 11 11:46:39 2014,Thu Dec 11 11:46:39 2014
+ 
+ESTATICO,merda.sh,2,Thu Dec 11 11:46:39 2014,Thu Dec 11 11:46:39 2014
+ 
+ESTATICO,merda.sh,4,Thu Dec 11 11:46:39 2014,Thu Dec 11 11:46:39 2014
+ 
+ESTATICO,merda.sh,3,Thu Dec 11 11:46:39 2014,Thu Dec 11 11:46:39 2014
+ 
+ESTATICO,merda.sh,0,Thu Dec 11 11:46:39 2014,Thu Dec 11 11:46:39 2014
+ 
+ESTATICO,merda.sh,1,Thu Dec 11 11:46:40 2014,Thu Dec 11 11:46:40 2014
+ 
+ESTATICO,merda.sh,2,Thu Dec 11 11:46:40 2014,Thu Dec 11 11:46:40 2014
+ 
+ESTATICO,merda.sh,4,Thu Dec 11 11:46:40 2014,Thu Dec 11 11:46:40 2014
+ 
+ESTATICO,merda.sh,3,Thu Dec 11 11:46:40 2014,Thu Dec 11 11:46:40 2014
+ 
+ESTATICO,merda.sh,0,Thu Dec 11 11:46:41 2014,Thu Dec 11 11:46:41 2014
+ 
+ESTATICO,merda.sh,2,Thu Dec 11 11:46:41 2014,Thu Dec 11 11:46:41 2014
+ 
+ESTATICO,merda.sh,4,Thu Dec 11 11:46:41 2014,Thu Dec 11 11:46:41 2014
+ 
+ESTATICO,merda.sh,3,Thu Dec 11 11:46:41 2014,Thu Dec 11 11:46:41 2014
+ 
+ESTATICO,merda.sh,0,Thu Dec 11 11:46:41 2014,Thu Dec 11 11:46:41 2014
+ 
+ESTATICO,merda.sh,1,Thu Dec 11 11:46:42 2014,Thu Dec 11 11:46:42 2014
+ 
+ESTATICO,merda.sh,2,Thu Dec 11 11:46:42 2014,Thu Dec 11 11:46:42 2014
+ 
+,index.html,0,Thu Dec 11 12:10:06 2014,Thu Dec 11 12:10:06 2014
+ 
+,hello.sh,3,Thu Dec 11 12:10:13 2014,Thu Dec 11 12:10:13 2014
+ 
+,hello.sh,0,Thu Dec 11 12:11:20 2014,Thu Dec 11 12:11:20 2014
+ 
+,hello.sh,2,Thu Dec 11 12:11:26 2014,Thu Dec 11 12:11:26 2014
+ 
+,hello.sh,3,Thu Dec 11 12:11:28 2014,Thu Dec 11 12:11:28 2014
+ 
+,hello.sh,4,Thu Dec 11 12:11:29 2014,Thu Dec 11 12:11:29 2014
+ 
+,hello.sh,0,Thu Dec 11 12:11:30 2014,Thu Dec 11 12:11:30 2014
+ 
+,hello.sh,1,Thu Dec 11 12:11:30 2014,Thu Dec 11 12:11:30 2014
+ 
+,hello.sh,2,Thu Dec 11 12:11:31 2014,Thu Dec 11 12:11:31 2014
+ 
+,hello.sh,3,Thu Dec 11 12:11:36 2014,Thu Dec 11 12:11:36 2014
+ 
+,hello.sh,4,Thu Dec 11 12:11:36 2014,Thu Dec 11 12:11:36 2014
+ 
+,hello.sh,0,Thu Dec 11 12:11:37 2014,Thu Dec 11 12:11:37 2014
+ 
+,hello.sh,1,Thu Dec 11 12:11:38 2014,Thu Dec 11 12:11:38 2014
+ 
+,hello.sh,2,Thu Dec 11 12:11:38 2014,Thu Dec 11 12:11:38 2014
+ 
+,hello.sh,3,Thu Dec 11 12:11:39 2014,Thu Dec 11 12:11:39 2014
+ 
+,hello.sh,0,Thu Dec 11 13:54:57 2014,Thu Dec 11 13:54:57 2014
+ 
+ESTATICO,index.html,2,Thu Dec 11 13:55:10 2014,Thu Dec 11 13:55:10 2014
+ 
+ESTATICO,merda.html,4,Thu Dec 11 13:56:20 2014,Thu Dec 11 13:56:20 2014
+ 
