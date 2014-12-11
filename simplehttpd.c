@@ -160,6 +160,8 @@
  	int i;
 
  	init();
+ 	define_policy(conf->policy);
+ 	printf(">>>>>>>> POLICY : %d >>>>>>>>>",policy);
  	
  	pthread_t SCHEDULER;
  	pthread_t POOL[atoi(conf->n)];
@@ -221,7 +223,6 @@
  		int res = check_script_request(req_buf);
  		if(res==1){
  			trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
-
  		}
 
  		
@@ -267,7 +268,7 @@
 	// Currently only supports GET 
  	if(!found_get) {
  		printf("Request from client without a GET\n");
- 		exit(1);
+ 		exit(2);
  	}
 	// If no particular page is requested then we consider htdocs/index.html
  	if(!strlen(req_buf))
@@ -496,7 +497,8 @@
  void conf_manager(){
 
  	read_conf();
- 	define_policy(conf->policy);
+ 	
+
  	//add to sleep
  	
  }
@@ -598,8 +600,8 @@
  			printf("Written to file.\n");
  		}
  	}
-
  	fclose(f);
+ 	
  }
 
  void request_to_queue(stats aux){
@@ -638,6 +640,7 @@
  	sem_close(empty);
  	sem_close(full);
  	sem_close(mutex);
+ 	while(wait(NULL)!=-1);
  }
 
  int check_script_request(char request[STRING]){
@@ -707,6 +710,8 @@
  		policy = PRIORIDADE_ESTATICO;
  	else if(strcmp(input,"DYNAMIC\n")==0)
  		policy = PRIORIDADE_DINAMICO;
+
+ 	printf("\n\n\n<<<<<<<<<o valor de policy e: %d >>>>>>>>\n\n\n",policy);
  }
 
  void create_queue(Q_TYPE *queue)
@@ -781,7 +786,9 @@
  {
  	while(1){
 
+
  		sem_wait(full2);
+
  		buff.prox_ped_atender.id_thread = *((int*)id);
  		if((buff.prox_ped_atender.tipo_pedido) == PEDIDO_ESTATICO){
  			send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
@@ -800,8 +807,12 @@
 
  void *sched()
  {
+ 	int valor_sem;
+ 	
  	PEDIDO pedido_temp;	
  	while(1){
+ 		sem_getvalue(full,&valor_sem);
+
  		if(policy == FIFO)
  		{
  			sem_wait(full);
@@ -906,7 +917,7 @@
  	char aux_buff[SIZE_BUF];
  	pid_t proc;
  	sprintf(aux,"scripts/%s",req.ficheiro);
- 	printf("%s",aux);
+ 	//printf("%s",aux);
  	if(pipe(fd)){
  		printf("Can't create pipe.\n");
  		cannot_execute(req.socket);
@@ -925,7 +936,7 @@
  			n = read(fd[0],aux_buff,sizeof(aux_buff));
  			if(n>0){
  				aux_buff[n] = '\0';
- 				printf("%s",aux_buff);
+ 				//printf("%s",aux_buff);
  				send(req.socket,aux_buff,strlen(aux_buff),0);
  			}
  		}while(n>0);

@@ -6,3 +6,65 @@ ESTATICO,cona.html,2,Thu Dec 11 16:06:33 2014,Thu Dec 11 16:06:33 2014
  
 ESTATICO,cona.sh,3,Thu Dec 11 16:06:41 2014,Thu Dec 11 16:06:41 2014
  
+ESTATICO,cona.html,0,Thu Dec 11 16:46:34 2014,Thu Dec 11 16:46:34 2014
+ 
+ESTATICO,favicon.ico,1,Thu Dec 11 16:46:34 2014,Thu Dec 11 16:46:34 2014
+ 
+ESTATICO,cona.sh,0,Thu Dec 11 16:53:49 2014,Thu Dec 11 16:53:49 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 17:18:27 2014,Thu Dec 11 17:18:27 2014
+ 
+ESTATICO,favicon.ico,2,Thu Dec 11 17:18:27 2014,Thu Dec 11 17:18:27 2014
+ 
+ESTATICO,favicon.ico,3,Thu Dec 11 17:18:27 2014,Thu Dec 11 17:18:27 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 17:21:43 2014,Thu Dec 11 17:21:43 2014
+ 
+ESTATICO,index.html,1,Thu Dec 11 17:22:02 2014,Thu Dec 11 17:22:02 2014
+ 
+DINAMICO,hello.sh,2,Thu Dec 11 17:22:17 2014,Thu Dec 11 17:22:17 2014
+ 
+DINAMICO,hello.sh,3,Thu Dec 11 17:22:56 2014,Thu Dec 11 17:22:56 2014
+ 
+ESTATICO,index.html,4,Thu Dec 11 17:23:11 2014,Thu Dec 11 17:23:11 2014
+ 
+DINAMICO,hello.sh,0,Thu Dec 11 17:25:00 2014,Thu Dec 11 17:25:00 2014
+ 
+ESTATICO,favicon.ico,1,Thu Dec 11 17:25:15 2014,Thu Dec 11 17:25:15 2014
+ 
+ESTATICO,favicon.ico,2,Thu Dec 11 17:25:30 2014,Thu Dec 11 17:25:30 2014
+ 
+ESTATICO,hello.sh%20&&%20localhost:9000/index.html,3,Thu Dec 11 17:25:45 2014,Thu Dec 11 17:25:45 2014
+ 
+ESTATICO,hello.sh&&localhost:9000/index.html,4,Thu Dec 11 17:26:08 2014,Thu Dec 11 17:26:08 2014
+ 
+DINAMICO,hello.sh,0,Thu Dec 11 17:30:19 2014,Thu Dec 11 17:30:19 2014
+ 
+DINAMICO,hello.sh,0,Thu Dec 11 17:30:20 2014,Thu Dec 11 17:30:24 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 17:30:23 2014,Thu Dec 11 17:30:29 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 17:30:54 2014,Thu Dec 11 17:30:54 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 17:30:58 2014,Thu Dec 11 17:30:59 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 17:31:01 2014,Thu Dec 11 17:31:04 2014
+ 
+DINAMICO,hello.sh,0,Thu Dec 11 17:31:03 2014,Thu Dec 11 17:31:09 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 17:31:41 2014,Thu Dec 11 17:31:41 2014
+ 
+ESTATICO,dijkstra.html,0,Thu Dec 11 17:33:33 2014,Thu Dec 11 17:33:33 2014
+ 
+ESTATICO,dijkstra.html,0,Thu Dec 11 17:36:31 2014,Thu Dec 11 17:36:31 2014
+ 
+ESTATICO,index.html,0,Thu Dec 11 17:43:37 2014,Thu Dec 11 17:44:28 2014
+ 
+DINAMICO,hello.sh,0,Thu Dec 11 17:51:53 2014,Thu Dec 11 17:52:20 2014
+ 
+ESTATICO,index.html,1,Thu Dec 11 17:51:59 2014,Thu Dec 11 17:52:49 2014
+ 
+ESTATICO,cona.sh,0,Thu Dec 11 18:22:37 2014,Thu Dec 11 18:22:37 2014
+ 
+ESTATICO,favicon.ico,1,Thu Dec 11 18:22:38 2014,Thu Dec 11 18:22:38 2014
+ 
