@@ -220,10 +220,10 @@
  		//if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
  		int res = check_script_request(req_buf);
  		if(res==1){
- 				trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
+ 			trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
 
- 			}
- 			
+ 		}
+
  		
  		else
 			// Search file with html page and send to client
@@ -560,6 +560,8 @@
  	aux.mtype=1;
  	if(buff.prox_ped_atender.tipo_pedido == PEDIDO_ESTATICO)
  		strcpy(aux.request_type,"ESTATICO");
+ 	if(buff.prox_ped_atender.tipo_pedido == PEDIDO_DINAMICO)
+ 		strcpy(aux.request_type,"DINAMICO");
  	strcpy(aux.filename,buff.prox_ped_atender.ficheiro);
  	strcpy(aux.reception_time,buff.prox_ped_atender.reception_time);
  	aux.thread_number = buff.prox_ped_atender.id_thread;
@@ -585,9 +587,16 @@
  		msgrcv(m_queue,&aux,sizeof(aux),0,0);
  		printf("Received message.\nWriting to file.\n");
  		strtok(aux.reception_time, "\n");
- 		printf("%s,%s,%d,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
- 		fprintf(f,"%s,%s,%d,%s,%s \n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
- 		printf("Written to file.\n");
+ 		if((strcmp(aux.request_type,"DINAMICO")==0) && (check_script_request(aux.filename)) == 1){
+ 			printf("%s,%s,%d,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 			fprintf(f,"%s,%s,%d,%s,%s \n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 			printf("Written to file.\n");
+ 		}
+ 		if(strcmp(aux.request_type,"ESTATICO")==0){
+ 			printf("%s,%s,%d,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 			fprintf(f,"%s,%s,%d,%s,%s \n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
+ 			printf("Written to file.\n");
+ 		}
  	}
 
  	fclose(f);
@@ -774,19 +783,18 @@
 
  		sem_wait(full2);
  		buff.prox_ped_atender.id_thread = *((int*)id);
- 		if(strcmp(buff.prox_ped_atender.ficheiro,"favicon.ico")!=0){
- 			if((buff.prox_ped_atender.tipo_pedido) == PEDIDO_ESTATICO){
- 				send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
- 			}
- 			else{
- 				trata_dinamico(buff.prox_ped_atender);
- 			}
- 			stats temp = prepare_stats();
- 			request_to_queue(temp);
- 			printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
- 			close(buff.prox_ped_atender.socket);
- 			
+ 		if((buff.prox_ped_atender.tipo_pedido) == PEDIDO_ESTATICO){
+ 			send_page(buff.prox_ped_atender.socket,buff.prox_ped_atender.ficheiro);
  		}
+ 		else{
+ 			trata_dinamico(buff.prox_ped_atender);
+ 		}
+ 		stats temp = prepare_stats();
+ 		request_to_queue(temp);
+ 		printf("\nPedido %d,atendido!\n",buff.prox_ped_atender.n_pedido);
+ 		close(buff.prox_ped_atender.socket);
+
+ 		
  	}
  }
 
@@ -908,7 +916,7 @@
  		dup2(fd[1],fileno(stdout));
  		close(fd[0]);
  		close(fd[1]);
- 	
+
  		execlp(aux,aux,NULL);
  	}
  	else{
