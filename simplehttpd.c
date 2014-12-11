@@ -220,8 +220,10 @@
  		//if(!strncmp(req_buf,CGI_EXPR,strlen(CGI_EXPR))){
  		int res = check_script_request(req_buf);
  		if(res==1){
- 			trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
- 		} 		
+ 				trata_pedido(new_conn,req_buf,PEDIDO_DINAMICO);
+
+ 			}
+ 			
  		
  		else
 			// Search file with html page and send to client
@@ -906,7 +908,7 @@
  		dup2(fd[1],fileno(stdout));
  		close(fd[0]);
  		close(fd[1]);
-
+ 	
  		execlp(aux,aux,NULL);
  	}
  	else{
