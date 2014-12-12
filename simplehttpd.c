@@ -56,7 +56,7 @@
  pid_t configuration;
  pid_t childs[2];
  time_t server_init_time;
- int conta_pedidos, fd[2];
+ int conta_pedidos, fd[2], req_refused=0,req_dynamic=0,req_static=0;
 
 
  time_t timestamp(){
@@ -161,21 +161,17 @@
 
  	init();
  	define_policy(conf->policy);
- 	printf(">>>>>>>> POLICY : %d >>>>>>>>>",policy);
  	
  	pthread_t SCHEDULER;
  	pthread_t POOL[atoi(conf->n)];
 
  	server_init_time = timestamp();
- 	printf("%s",asctime(localtime(&server_init_time)));
 
  	struct sockaddr_in client_name;
  	socklen_t client_name_len = sizeof(client_name);
  	int port,n;
 
  	signal(SIGINT,catch_ctrlc);
- 	signal(SIGHUP,catch_hangup);
-
 
  	port = atoi(conf->port);
  	n = atoi(conf->n);
@@ -228,13 +224,14 @@
 				// Search file with html page and send to client
 	 			//send_page(new_conn);
  		{
- 			
-			printf("Entrei nos estaticos\n");
- 			trata_pedido(new_conn,req_buf,PEDIDO_ESTATICO);
- 		}
- 		else{
  			printf("Can't handle it.\n");
  			cannot_execute(new_conn);
+ 			req_refused++;
+ 			
+ 		}
+ 		else{
+ 			printf("Entrei nos estaticos\n");
+ 			trata_pedido(new_conn,req_buf,PEDIDO_ESTATICO);
  		}
 
 		// Terminate connection with client 
@@ -488,7 +485,7 @@
  {
  	printf("Server terminating\n");
  	close(socket_conn);
- 	//display_stats();
+ 	display_stats();
  	cleanup();
  	exit(0);
  }
@@ -496,10 +493,12 @@
  void catch_hangup(int sig){
  	printf("Catched SIGHUP.\n");
  	read_conf();
+
  }
 
  void conf_manager(){
 
+ 	signal(SIGHUP,catch_hangup);
  	read_conf();
  	
 
@@ -557,8 +556,9 @@
 
  void stats_manager(){
 
- 	//signal(SIGINT,display_stats);
+ 	signal(SIGHUP,catch_hangup);
  	write_stats();
+
  }
 
  stats prepare_stats(){
@@ -595,11 +595,13 @@
  		printf("Received message.\nWriting to file.\n");
  		strtok(aux.reception_time, "\n");
  		if((strcmp(aux.request_type,"DINAMICO")==0) && (check_script_request(aux.filename)) == 1){
+ 			req_dynamic++;
  			printf("%s,%s,%d,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
  			fprintf(f,"%s,%s,%d,%s,%s \n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
  			printf("Written to file.\n");
  		}
  		if(strcmp(aux.request_type,"ESTATICO")==0){
+ 			req_static++;
  			printf("%s,%s,%d,%s,%s\n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
  			fprintf(f,"%s,%s,%d,%s,%s \n",aux.request_type,aux.filename,aux.thread_number,aux.reception_time,aux.conclusion_time);
  			printf("Written to file.\n");
@@ -624,13 +626,13 @@
 
  void display_stats(){
  	time_t current_time = timestamp();
- 	int n_static=14,n_dynamic=13,n_refused=2;
 
- 	printf("Server initiated: %s | Current time: %s",asctime(localtime(&server_init_time)),asctime(localtime(&current_time)));
- //esta a devolver a data mal, ver para nao ter este bug
- 	printf("Number of successful requests to static content: %d", n_static);
- 	printf("Number of successful requests to dynamic content: %d", n_dynamic);
- 	printf("Number of refused requests: %d", n_refused);
+ 	printf("Server initiated: %s",asctime(localtime(&server_init_time)));
+ 	printf("Server closed: %s",asctime(localtime(&current_time)));
+
+ 	printf("Number of successful requests to static content: %d", req_static);
+ 	printf("Number of successful requests to dynamic content: %d", req_dynamic);
+ 	printf("Number of refused requests: %d", req_refused);
 
  }
 
@@ -655,6 +657,7 @@
  	token = strtok(conf->script,",");
  	while(token != NULL){
  		if(strcmp(token,request)==0)
+ 			printf("CORRESPONDE !!!!\n");
  			return 1;
  		token = strtok(NULL,",");
  	}
@@ -715,8 +718,6 @@
  		policy = PRIORIDADE_ESTATICO;
  	else if(strcmp(input,"DYNAMIC\n")==0)
  		policy = PRIORIDADE_DINAMICO;
-
- 	printf("\n\n\n<<<<<<<<<o valor de policy e: %d >>>>>>>>\n\n\n",policy);
  }
 
  void create_queue(Q_TYPE *queue)
